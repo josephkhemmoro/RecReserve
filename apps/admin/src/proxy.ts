@@ -1,0 +1,35 @@
+import { type NextRequest, NextResponse } from "next/server";
+import { updateSession } from "@/utils/supabase/middleware";
+
+export async function proxy(request: NextRequest) {
+  const response = await updateSession(request);
+
+  const { pathname } = request.nextUrl;
+
+  const isLoginPage = pathname === "/login";
+  const isPublicAsset =
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".");
+
+  if (isPublicAsset) {
+    return response;
+  }
+
+  const hasSession = request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.includes("auth-token"));
+
+  if (!hasSession && !isLoginPage) {
+    const loginUrl = new URL("/login", request.url);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return response;
+}
+
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+};

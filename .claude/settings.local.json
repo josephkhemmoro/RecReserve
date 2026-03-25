@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf mobile)",
+      "Bash(npx create-expo-app:*)",
+      "Bash(npx expo:*)",
+      "Bash(rm -rf admin)",
+      "Bash(npx create-next-app@latest admin --typescript --eslint --tailwind --src-dir --app --no-import-alias --use-npm)",
+      "Bash(yes \"\")",
+      "Bash(npx create-next-app@latest admin --typescript --eslint --tailwind --src-dir --app --no-import-alias --use-npm --no-turbopack)",
+      "Bash(npm install:*)",
+      "Bash(timeout 15 npm run dev)",
+      "Bash(npx next:*)",
+      "Bash(npx expo-doctor:*)",
+      "Bash(npx create-expo-app@latest mobile --template blank -- --npm)",
+      "Bash(npx create-expo-app@3.2.0 mobile --template blank)",
+      "Bash(grep '\"\"expo\"\"' package.json)",
+      "Bash(cd:*)"
+    ]
+  }
+}
