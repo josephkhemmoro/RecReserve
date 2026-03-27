@@ -43,6 +43,8 @@ export default function OnboardingPage() {
   const [availability, setAvailability] = useState<AvailabilityForm[]>(
     Array.from({ length: 7 }, () => ({ enabled: true, open: "08:00", close: "21:00" }))
   );
+  const [stripeOnboardingUrl, setStripeOnboardingUrl] = useState("");
+
   const [rules, setRules] = useState<RulesForm>({
     max_booking_duration_mins: 60,
     advance_booking_days: 7,
@@ -148,6 +150,29 @@ export default function OnboardingPage() {
         start_date: new Date().toISOString().split("T")[0],
         is_active: true,
       });
+
+      // Kick off Stripe Connect onboarding
+      try {
+        const { data: stripeData, error: stripeErr } = await supabase.functions.invoke(
+          "create-connect-account",
+          {
+            body: {
+              club_id: newClub.id,
+              email: session.user.email,
+              return_url: `${window.location.origin}/stripe-return`,
+              refresh_url: `${window.location.origin}/stripe-return?refresh=true`,
+            },
+          }
+        );
+
+        if (!stripeErr && stripeData?.url) {
+          // Store the URL so the Done step can redirect
+          setStripeOnboardingUrl(stripeData.url);
+        }
+      } catch (e) {
+        // Non-fatal — club is created, they can set up Stripe later
+        console.warn("Stripe Connect setup deferred:", e);
+      }
 
       setStep(3);
     } catch (err) {
@@ -322,16 +347,35 @@ export default function OnboardingPage() {
           <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">✓</span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mb-2">You&apos;re All Set!</h2>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Club Created!</h2>
           <p className="text-slate-500 mb-6">
-            Your club is ready. You can add more courts and customize settings from the dashboard.
+            {stripeOnboardingUrl
+              ? "One last step — connect your Stripe account so you can accept payments from players."
+              : "Your club is ready. You can add more courts and customize settings from the dashboard."}
           </p>
-          <button
-            onClick={() => router.replace("/")}
-            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Go to Dashboard
-          </button>
+          {stripeOnboardingUrl ? (
+            <div className="space-y-3">
+              <a
+                href={stripeOnboardingUrl}
+                className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Set Up Stripe Payments
+              </a>
+              <button
+                onClick={() => router.replace("/")}
+                className="block mx-auto text-sm text-slate-500 hover:text-slate-700"
+              >
+                Skip for now
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => router.replace("/")}
+              className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Go to Dashboard
+            </button>
+          )}
         </div>
       )}
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import * as Notifications from 'expo-notifications'
+import { StripeProvider } from '@stripe/stripe-react-native'
 import { supabase } from '../lib/supabase'
 import { registerForPushNotifications, getNotificationRoute } from '../lib/notifications'
 import { useAuthStore } from '../store/authStore'
@@ -9,10 +10,17 @@ import { useClubStore } from '../store/clubStore'
 import { ErrorBoundary } from '../components/ui/ErrorBoundary'
 import { NetworkToast } from '../components/ui/NetworkToast'
 
+const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <RootLayoutInner />
+      <StripeProvider
+        publishableKey={STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.com.recreserve"
+      >
+        <RootLayoutInner />
+      </StripeProvider>
     </ErrorBoundary>
   )
 }
@@ -27,11 +35,17 @@ function RootLayoutInner() {
 
   // Auth initialization
   useEffect(() => {
+    console.log('[App] Starting auth initialization')
+    console.log('[App] Supabase URL:', process.env.EXPO_PUBLIC_SUPABASE_URL)
+    console.log('[App] Has Supabase key:', !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY)
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[App] Got session:', !!session)
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
     }).catch((err) => {
+      console.error('[App] Auth init error:', err)
       if (err?.message?.includes('network') || err?.message?.includes('fetch')) {
         setNetworkError(true)
         setTimeout(() => setNetworkError(false), 4500)

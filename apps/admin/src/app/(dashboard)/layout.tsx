@@ -20,6 +20,8 @@ const navItems: NavItem[] = [
   { label: "Events", href: "/events" },
 ];
 
+type StripeState = "loading" | "not_connected" | "pending" | "active";
+
 export default function DashboardLayout({
   children,
 }: {
@@ -28,6 +30,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
+  const [stripeState, setStripeState] = useState<StripeState>("loading");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -44,7 +47,7 @@ export default function DashboardLayout({
 
         const { data: profile } = await supabase
           .from("users")
-          .select("role")
+          .select("role, club_id")
           .eq("id", session.user.id)
           .single();
 
@@ -54,16 +57,26 @@ export default function DashboardLayout({
           return;
         }
 
-        // Check if admin has a club — if not, redirect to onboarding
-        const { data: userProfile } = await supabase
-          .from("users")
-          .select("club_id")
-          .eq("id", session.user.id)
-          .single();
-
-        if (!userProfile?.club_id && pathname !== "/onboarding") {
+        if (!profile?.club_id && pathname !== "/onboarding") {
           router.replace("/onboarding");
           return;
+        }
+
+        // Check Stripe Connect status
+        if (profile?.club_id) {
+          const { data: club } = await supabase
+            .from("clubs")
+            .select("stripe_account_id, stripe_onboarding_complete")
+            .eq("id", profile.club_id)
+            .single();
+
+          if (club?.stripe_onboarding_complete) {
+            setStripeState("active");
+          } else if (club?.stripe_account_id) {
+            setStripeState("pending");
+          } else {
+            setStripeState("not_connected");
+          }
         }
 
         setAuthorized(true);
@@ -73,7 +86,7 @@ export default function DashboardLayout({
     };
 
     checkAuth();
-  }, [router]);
+  }, [router, pathname]);
 
   const handleSignOut = async () => {
     try {
@@ -120,7 +133,27 @@ export default function DashboardLayout({
           })}
         </div>
 
-        <div className="px-3 py-4 border-t border-slate-800">
+        <div className="px-3 py-4 border-t border-slate-800 space-y-2">
+          {stripeState !== "loading" && (
+            <div className="px-3 py-2 rounded-lg text-xs">
+              <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${
+                  stripeState === "active"
+                    ? "bg-green-400"
+                    : stripeState === "pending"
+                    ? "bg-amber-400"
+                    : "bg-red-400"
+                }`} />
+                <span className="text-slate-400">
+                  {stripeState === "active"
+                    ? "Stripe Connected"
+                    : stripeState === "pending"
+                    ? "Stripe Pending"
+                    : "Stripe Not Set Up"}
+                </span>
+              </div>
+            </div>
+          )}
           <button
             onClick={handleSignOut}
             className="w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 text-left transition-colors"

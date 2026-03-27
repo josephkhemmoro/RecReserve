@@ -99,6 +99,7 @@ export default function BookingConfirmScreen() {
             amount: Math.round(totalPrice * 100),
             court_id: selectedCourt.id,
             user_id: user?.id,
+            club_id: selectedClub?.id,
             date: selectedDate,
             start_time: selectedSlot.startTime,
             end_time: selectedSlot.endTime,

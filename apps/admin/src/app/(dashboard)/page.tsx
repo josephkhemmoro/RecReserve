@@ -4,6 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 
+interface StripeStatus {
+  connected: boolean;
+  onboardingComplete: boolean;
+}
+
 interface Stats {
   totalCourts: number;
   activeMembers: number;
@@ -49,6 +54,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [todayList, setTodayList] = useState<TodayReservation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null);
 
   const fetchDashboard = useCallback(async (clubId: string) => {
     const supabase = createClient();
@@ -58,6 +64,18 @@ export default function DashboardPage() {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
     try {
+      // Check Stripe Connect status
+      const { data: clubData } = await supabase
+        .from("clubs")
+        .select("stripe_account_id, stripe_onboarding_complete")
+        .eq("id", clubId)
+        .single();
+
+      setStripeStatus({
+        connected: !!clubData?.stripe_account_id,
+        onboardingComplete: !!clubData?.stripe_onboarding_complete,
+      });
+
       const [courtsRes, membersRes, todayCountRes, revenueRes, todayListRes] =
         await Promise.all([
           supabase
@@ -128,11 +146,107 @@ export default function DashboardPage() {
 
   const isLoading = adminLoading || loading;
 
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState("");
+
+  const handleSetupStripe = async () => {
+    if (!admin) return;
+    setStripeLoading(true);
+    setStripeError("");
+    try {
+      const supabase = createClient();
+      // Force a token refresh to ensure we have a valid access token
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      const session = refreshedSession;
+      console.log("[Stripe Setup] Session:", !!session, "Refresh error:", refreshError);
+      if (!session) {
+        setStripeError("Not authenticated. Please log in again.");
+        return;
+      }
+
+      // Call edge function directly via fetch to control headers precisely
+      const fnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/create-connect-account`;
+      const response = await fetch(fnUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        },
+        body: JSON.stringify({
+          club_id: admin.clubId,
+          email: session.user.email,
+          return_url: `${window.location.origin}/stripe-return`,
+          refresh_url: `${window.location.origin}/stripe-return?refresh=true`,
+        }),
+      });
+
+      const data = await response.json();
+      const error = response.ok ? null : data;
+
+      if (error) {
+        console.error("Stripe function error:", error);
+        setStripeError(error.error || error.message || "Failed to start Stripe setup");
+        return;
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+      } else {
+        console.error("No URL returned:", data);
+        setStripeError("No onboarding URL returned. Check that the edge function is deployed.");
+      }
+    } catch (err) {
+      console.error("Error starting Stripe setup:", err);
+      setStripeError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setStripeLoading(false);
+    }
+  };
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-900 mb-8">
         Welcome back, {admin?.fullName || "..."}
       </h1>
+
+      {/* Stripe Connect Banner */}
+      {stripeStatus && !stripeStatus.onboardingComplete && (
+        <div className={`rounded-xl border p-4 mb-6 ${
+          stripeStatus.connected
+            ? "bg-amber-50 border-amber-200"
+            : "bg-blue-50 border-blue-200"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`font-semibold text-sm ${stripeStatus.connected ? "text-amber-800" : "text-blue-800"}`}>
+                {stripeStatus.connected
+                  ? "Stripe setup incomplete"
+                  : "Set up payments to accept bookings"}
+              </p>
+              <p className={`text-xs mt-0.5 ${stripeStatus.connected ? "text-amber-600" : "text-blue-600"}`}>
+                {stripeStatus.connected
+                  ? "Complete your Stripe onboarding to start receiving payments from players."
+                  : "Connect a Stripe account so player payments route directly to your bank."}
+              </p>
+            </div>
+            <button
+              onClick={handleSetupStripe}
+              disabled={stripeLoading}
+              className={`px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-50 ${
+                stripeStatus.connected
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-blue-600 hover:bg-blue-700"
+              }`}
+            >
+              {stripeLoading ? "Loading..." : stripeStatus.connected ? "Continue Setup" : "Connect Stripe"}
+            </button>
+          </div>
+          {stripeError && (
+            <p className="text-xs text-red-600 mt-2">{stripeError}</p>
+          )}
+        </div>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
