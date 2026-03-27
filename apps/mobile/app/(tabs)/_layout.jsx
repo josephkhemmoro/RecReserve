@@ -1,6 +1,24 @@
 import { Tabs } from 'expo-router'
-import { StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import { useNotificationStore } from '../../store/notificationStore'
+
+function NotificationIcon({ color, size }) {
+  const { unreadCount } = useNotificationStore()
+
+  return (
+    <View>
+      <Ionicons name="notifications-outline" size={size} color={color} />
+      {unreadCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </Text>
+        </View>
+      )}
+    </View>
+  )
+}
 
 export default function TabsLayout() {
   return (
@@ -41,6 +59,15 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Alerts',
+          tabBarIcon: ({ color, size }) => (
+            <NotificationIcon color={color} size={size} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
@@ -65,5 +92,22 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    backgroundColor: '#dc2626',
+    borderRadius: 9,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 })

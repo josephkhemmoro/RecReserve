@@ -82,8 +82,7 @@ export default function ReservationsScreen() {
     if (!bookingRules?.cancellation_cutoff_hours) return true
     const cutoffMs = bookingRules.cancellation_cutoff_hours * 60 * 60 * 1000
     const startTime = new Date(reservation.start_time).getTime()
-    const now = Date.now()
-    return startTime - now > cutoffMs
+    return startTime - Date.now() > cutoffMs
   }
 
   const handleCancel = (reservation) => {
@@ -95,31 +94,58 @@ export default function ReservationsScreen() {
       return
     }
 
-    Alert.alert(
-      'Cancel Reservation',
-      'Are you sure you want to cancel this reservation?',
-      [
-        { text: 'Keep', style: 'cancel' },
-        {
-          text: 'Cancel Reservation',
-          style: 'destructive',
-          onPress: () => confirmCancel(reservation),
-        },
-      ]
-    )
+    // If part of a series, ask what to cancel
+    if (reservation.series_id) {
+      Alert.alert(
+        'Cancel Reservation',
+        'This is part of a recurring series.',
+        [
+          { text: 'Keep', style: 'cancel' },
+          {
+            text: 'Cancel This One',
+            onPress: () => confirmCancel(reservation, false),
+          },
+          {
+            text: 'Cancel Entire Series',
+            style: 'destructive',
+            onPress: () => confirmCancel(reservation, true),
+          },
+        ]
+      )
+    } else {
+      Alert.alert(
+        'Cancel Reservation',
+        'Are you sure you want to cancel this reservation?',
+        [
+          { text: 'Keep', style: 'cancel' },
+          { text: 'Cancel Reservation', style: 'destructive', onPress: () => confirmCancel(reservation, false) },
+        ]
+      )
+    }
   }
 
-  const confirmCancel = async (reservation) => {
+  const confirmCancel = async (reservation, cancelSeries) => {
     setCancellingId(reservation.id)
     try {
-      const { error } = await supabase
-        .from('reservations')
-        .update({ status: 'cancelled' })
-        .eq('id', reservation.id)
+      if (cancelSeries && reservation.series_id) {
+        // Cancel all future reservations in the series
+        const { error } = await supabase
+          .from('reservations')
+          .update({ status: 'cancelled' })
+          .eq('series_id', reservation.series_id)
+          .eq('status', 'confirmed')
+          .gte('start_time', new Date().toISOString())
 
-      if (error) throw error
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('reservations')
+          .update({ status: 'cancelled' })
+          .eq('id', reservation.id)
 
-      // Trigger refund via edge function if payment exists
+        if (error) throw error
+      }
+
       if (reservation.stripe_payment_id) {
         await supabase.functions.invoke('process-refund', {
           body: {
@@ -137,21 +163,11 @@ export default function ReservationsScreen() {
     }
   }
 
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  const formatDate = (dateStr) =>
+    new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
-  const formatTime = (dateStr) => {
-    return new Date(dateStr).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    })
-  }
+  const formatTime = (dateStr) =>
+    new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 
   const getStatusStyle = (reservation) => {
     if (reservation.status === 'cancelled') return { bg: '#fef2f2', text: '#dc2626', label: 'Cancelled' }
@@ -160,19 +176,45 @@ export default function ReservationsScreen() {
     return { bg: '#eff6ff', text: '#2563eb', label: 'Confirmed' }
   }
 
+  // Count remaining in series
+  const getSeriesInfo = (reservation) => {
+    if (!reservation.series_id) return null
+    const seriesItems = reservations.filter(
+      (r) => r.series_id === reservation.series_id && r.status === 'confirmed'
+    )
+    const total = reservations.filter((r) => r.series_id === reservation.series_id).length
+    return { remaining: seriesItems.length, total }
+  }
+
   const renderReservation = ({ item }) => {
     const statusInfo = getStatusStyle(item)
     const cancelable = activeTab === 'Upcoming' && canCancel(item)
     const withinCutoff = activeTab === 'Upcoming' && !canCancel(item)
+    const seriesInfo = getSeriesInfo(item)
+    const guestList = item.guests || []
 
     return (
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardInfo}>
-            <Text style={styles.courtName}>{item.court?.name || 'Court'}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.courtName}>{item.court?.name || 'Court'}</Text>
+              {seriesInfo && (
+                <View style={styles.recurringBadge}>
+                  <Text style={styles.recurringBadgeText}>
+                    Recurring · {seriesInfo.remaining} left
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.dateTime}>
               {formatDate(item.start_time)} · {formatTime(item.start_time)} – {formatTime(item.end_time)}
             </Text>
+            {guestList.length > 0 && (
+              <Text style={styles.guestText}>
+                Guests: {guestList.join(', ')}
+              </Text>
+            )}
           </View>
           <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
             <Text style={[styles.statusText, { color: statusInfo.text }]}>
@@ -219,9 +261,7 @@ export default function ReservationsScreen() {
             style={[styles.tab, activeTab === tab && styles.tabActive]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab}
-            </Text>
+            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -248,9 +288,7 @@ export default function ReservationsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
       )}
     </View>
@@ -258,132 +296,32 @@ export default function ReservationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingTop: 70,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  header: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  tabRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    gap: 8,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-  },
-  tabActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  tabTextActive: {
-    color: '#ffffff',
-  },
-  list: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  courtName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  dateTime: {
-    fontSize: 13,
-    color: '#64748b',
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  cardFooter: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    alignItems: 'flex-start',
-  },
-  cancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
-  },
-  cancelButtonText: {
-    color: '#dc2626',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  cutoffText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 6,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 70 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { paddingHorizontal: 20, marginBottom: 16 },
+  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
+  tabRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 16, gap: 8 },
+  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
+  tabActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  tabText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
+  tabTextActive: { color: '#ffffff' },
+  list: { paddingHorizontal: 20, paddingBottom: 40 },
+  card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f1f5f9' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardInfo: { flex: 1, marginRight: 12 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
+  courtName: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
+  recurringBadge: { backgroundColor: '#faf5ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  recurringBadgeText: { fontSize: 11, fontWeight: '600', color: '#7c3aed' },
+  dateTime: { fontSize: 13, color: '#64748b' },
+  guestText: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 12, fontWeight: '700' },
+  cardFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', alignItems: 'flex-start' },
+  cancelButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fef2f2' },
+  cancelButtonText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
+  cutoffText: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1e293b', marginBottom: 6 },
+  emptySubtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
 })

@@ -54,6 +54,18 @@ export default function DashboardLayout({
           return;
         }
 
+        // Check if admin has a club — if not, redirect to onboarding
+        const { data: userProfile } = await supabase
+          .from("users")
+          .select("club_id")
+          .eq("id", session.user.id)
+          .single();
+
+        if (!userProfile?.club_id && pathname !== "/onboarding") {
+          router.replace("/onboarding");
+          return;
+        }
+
         setAuthorized(true);
       } catch {
         router.replace("/login");

@@ -8,7 +8,13 @@ export type MembershipTier = 'standard' | 'premium' | 'guest'
 
 export type EventType = 'open_play' | 'clinic' | 'tournament' | 'lesson'
 
-export type NotificationType = 'reservation' | 'waitlist' | 'event' | 'general' | 'cancellation'
+export type NotificationType =
+  | 'booking_confirmation'
+  | 'booking_reminder'
+  | 'cancellation'
+  | 'waitlist_promotion'
+  | 'event_reminder'
+  | 'general'
 
 export type EventRegistrationStatus = 'registered' | 'cancelled' | 'waitlisted'
 
@@ -32,6 +38,7 @@ export interface User {
   club_id?: string
   avatar_url?: string
   phone?: string
+  push_token?: string
   created_at: string
 }
 
@@ -75,6 +82,7 @@ export interface Reservation {
   notes?: string
   stripe_payment_id?: string
   amount_paid: number
+  reminder_sent?: boolean
   created_at: string
   court?: Court
 }
