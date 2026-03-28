@@ -66,7 +66,6 @@ export default function HomeScreen() {
       console.error('Error fetching reservations:', err)
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }, [user?.id, selectedClub?.id])
 
@@ -74,12 +73,13 @@ export default function HomeScreen() {
     if (user?.id) fetchUpcoming()
   }, [user?.id, fetchUpcoming])
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true)
-    fetchUpcoming()
-    if (selectedClub?.id) {
-      fetchClubDetail(selectedClub.id)
-    }
+    await Promise.all([
+      fetchUpcoming(),
+      selectedClub?.id ? fetchClubDetail(selectedClub.id) : Promise.resolve(),
+    ])
+    setRefreshing(false)
   }
 
   const formatDate = (dateStr) => {

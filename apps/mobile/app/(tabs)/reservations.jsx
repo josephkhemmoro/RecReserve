@@ -266,31 +266,35 @@ export default function ReservationsScreen() {
         ))}
       </View>
 
-      {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
-        </View>
-      ) : reservations.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>
-            {activeTab === 'Upcoming' ? 'No upcoming reservations' : 'No past reservations'}
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            {activeTab === 'Upcoming'
-              ? 'Book a court to see your reservations here'
-              : 'Your completed and cancelled reservations will appear here'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={reservations}
-          renderItem={renderReservation}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
-      )}
+      <FlatList
+        data={loading ? [] : reservations}
+        renderItem={renderReservation}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.list,
+          (loading || reservations.length === 0) && { flexGrow: 1 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.centered}>
+              <ActivityIndicator size="large" color="#2563eb" />
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'Upcoming' ? 'No upcoming reservations' : 'No past reservations'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {activeTab === 'Upcoming'
+                  ? 'Book a court to see your reservations here'
+                  : 'Your completed and cancelled reservations will appear here'}
+              </Text>
+            </View>
+          )
+        }
+      />
     </View>
   )
 }

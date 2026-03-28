@@ -123,7 +123,16 @@ export default function DashboardPage() {
         revenueThisMonth: revenue,
       });
 
-      setTodayList((todayListRes.data ?? []) as unknown as TodayReservation[]);
+      setTodayList(
+        (todayListRes.data ?? []).map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          start_time: r.start_time as string,
+          end_time: r.end_time as string,
+          status: r.status as string,
+          court: r.court as { name: string } | null,
+          user: r.user as { full_name: string; email: string } | null,
+        }))
+      );
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {

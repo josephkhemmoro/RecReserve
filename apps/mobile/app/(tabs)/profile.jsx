@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
@@ -24,12 +25,13 @@ export default function ProfileScreen() {
   const router = useRouter()
   const { user, clearAuth } = useAuthStore()
   const { selectedClub, clearClub } = useClubStore()
-  const { tier, membership, loading: tierLoading, clearMembership } = useMembershipStore()
+  const { tier, membership, loading: tierLoading, clearMembership, fetchMembershipTier } = useMembershipStore()
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -39,6 +41,15 @@ export default function ProfileScreen() {
   useEffect(() => {
     fetchProfile()
   }, [user?.id])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await Promise.all([
+      fetchProfile(),
+      fetchMembershipTier(user?.id, selectedClub?.id),
+    ])
+    setRefreshing(false)
+  }, [user?.id, selectedClub?.id])
 
   const fetchProfile = async () => {
     if (!user?.id) return
@@ -160,7 +171,12 @@ export default function ProfileScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         <View style={styles.header}>
           <TouchableOpacity onPress={handleAvatarPick} style={styles.avatarContainer}>
             {avatarUrl ? (

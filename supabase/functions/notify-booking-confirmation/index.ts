@@ -18,7 +18,7 @@ serve(async (req) => {
     // Fetch reservation with court and user details
     const { data: reservation, error: resError } = await supabase
       .from("reservations")
-      .select("id, user_id, start_time, end_time, court:courts(name)")
+      .select("id, user_id, club_id, start_time, end_time, court:courts(name)")
       .eq("id", reservation_id)
       .single();
 
@@ -47,8 +47,16 @@ serve(async (req) => {
       minute: "2-digit",
     });
 
+    // Fetch club name
+    const { data: club } = await supabase
+      .from("clubs")
+      .select("name")
+      .eq("id", reservation.club_id)
+      .single();
+    const clubName = club?.name ?? "";
+
     const courtName = reservation.court?.name ?? "Court";
-    const title = "Booking Confirmed 🎾";
+    const title = clubName ? `${clubName} - Booking Confirmed` : "Booking Confirmed";
     const body = `${courtName} on ${dateStr} at ${timeStr}`;
 
     // Write to notifications table

@@ -19,7 +19,7 @@ interface GridReservation {
   user: { full_name: string; email: string } | null;
 }
 
-const HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6AM to 7PM
+const DEFAULT_HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6AM to 7PM
 
 function formatDateInput(d: Date): string {
   return d.toISOString().split("T")[0];
@@ -33,6 +33,7 @@ export default function ReservationsPage() {
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<GridReservation | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [hours, setHours] = useState<number[]>(DEFAULT_HOURS);
 
   const fetchData = useCallback(async (clubId: string, date: string) => {
     setLoading(true);
@@ -57,8 +58,40 @@ export default function ReservationsPage() {
           .eq("status", "confirmed"),
       ]);
 
-      setCourts((courtsRes.data ?? []) as Court[]);
-      setReservations((resRes.data ?? []) as unknown as GridReservation[]);
+      const courtList = (courtsRes.data ?? []) as Court[];
+      setCourts(courtList);
+
+      setReservations(
+        (resRes.data ?? []).map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          court_id: r.court_id as string,
+          start_time: r.start_time as string,
+          end_time: r.end_time as string,
+          status: r.status as string,
+          amount_paid: r.amount_paid as number,
+          user: r.user as { full_name: string; email: string } | null,
+        }))
+      );
+
+      // Fetch court availability for this day to derive grid hours
+      const dayOfWeek = new Date(date).getDay();
+      if (courtList.length > 0) {
+        const { data: avail } = await supabase
+          .from("court_availability")
+          .select("open_time, close_time")
+          .in("court_id", courtList.map((c) => c.id))
+          .eq("day_of_week", dayOfWeek);
+
+        if (avail && avail.length > 0) {
+          const minHour = Math.min(...avail.map((a: { open_time: string }) => parseInt(a.open_time.split(":")[0])));
+          const maxHour = Math.max(...avail.map((a: { close_time: string }) => parseInt(a.close_time.split(":")[0])));
+          setHours(Array.from({ length: maxHour - minHour + 1 }, (_, i) => i + minHour));
+        } else {
+          setHours(DEFAULT_HOURS);
+        }
+      } else {
+        setHours(DEFAULT_HOURS);
+      }
     } catch (err) {
       console.error("Error fetching grid data:", err);
     } finally {
@@ -153,7 +186,7 @@ export default function ReservationsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase w-32 sticky left-0 bg-white">
                   Court
                 </th>
-                {HOURS.map((h) => (
+                {hours.map((h) => (
                   <th key={h} className="px-2 py-3 text-center text-xs font-medium text-slate-500 uppercase min-w-[80px]">
                     {h > 12 ? `${h - 12}PM` : h === 12 ? "12PM" : `${h}AM`}
                   </th>
@@ -166,7 +199,7 @@ export default function ReservationsPage() {
                   <td className="px-4 py-2 text-sm font-medium text-slate-900 sticky left-0 bg-white">
                     {court.name}
                   </td>
-                  {HOURS.map((h) => {
+                  {hours.map((h) => {
                     const res = getReservationForCell(court.id, h);
                     return (
                       <td key={h} className="px-1 py-1">

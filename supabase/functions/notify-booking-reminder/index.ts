@@ -12,7 +12,7 @@ serve(async (_req) => {
     // Find reservations starting in the next 60 minutes that haven't been reminded
     const { data: reservations, error } = await supabase
       .from("reservations")
-      .select("id, user_id, start_time, end_time, court:courts(name)")
+      .select("id, user_id, club_id, start_time, end_time, court:courts(name)")
       .eq("status", "confirmed")
       .eq("reminder_sent", false)
       .gte("start_time", now.toISOString())
@@ -35,8 +35,16 @@ serve(async (_req) => {
         minute: "2-digit",
       });
 
+      // Fetch club name
+      const { data: club } = await supabase
+        .from("clubs")
+        .select("name")
+        .eq("id", reservation.club_id)
+        .single();
+      const clubName = club?.name ?? "";
+
       const courtName = reservation.court?.name ?? "Court";
-      const title = "Your court is in 1 hour ⏰";
+      const title = clubName ? `${clubName} - Court in 1 hour` : "Your court is in 1 hour";
       const body = `${courtName} at ${timeStr}`;
 
       // Write notification

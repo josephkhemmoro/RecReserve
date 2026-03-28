@@ -15,6 +15,7 @@ export type NotificationType =
   | 'waitlist_promotion'
   | 'event_reminder'
   | 'general'
+  | 'announcement'
 
 export type EventRegistrationStatus = 'registered' | 'cancelled' | 'waitlisted'
 

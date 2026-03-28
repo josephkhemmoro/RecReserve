@@ -47,6 +47,7 @@ export default function EventsPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [registrants, setRegistrants] = useState<Registrant[]>([]);
   const [loadingReg, setLoadingReg] = useState(false);
+  const [formError, setFormError] = useState("");
 
   const fetchEvents = useCallback(async (clubId: string) => {
     try {
@@ -102,6 +103,21 @@ export default function EventsPage() {
 
   const handleCreate = async () => {
     if (!admin?.clubId || !form.title.trim() || !form.date) return;
+    setFormError("");
+
+    // Validate date is not in the past
+    const today = new Date().toISOString().split("T")[0];
+    if (form.date < today) {
+      setFormError("Event date cannot be in the past.");
+      return;
+    }
+
+    // Validate end time is after start time
+    if (form.end_time <= form.start_time) {
+      setFormError("End time must be after start time.");
+      return;
+    }
+
     setSaving(true);
     try {
       const supabase = createClient();
@@ -153,7 +169,13 @@ export default function EventsPage() {
         .eq("event_id", eventId)
         .order("created_at");
       if (error) throw error;
-      setRegistrants((data ?? []) as unknown as Registrant[]);
+      setRegistrants(
+        (data ?? []).map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          status: r.status as string,
+          user: r.user as { full_name: string; email: string } | null,
+        }))
+      );
     } catch (err) {
       console.error("Error fetching registrants:", err);
     } finally {
@@ -238,11 +260,16 @@ export default function EventsPage() {
               <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
+          {formError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mt-4 text-sm">
+              {formError}
+            </div>
+          )}
           <div className="flex gap-3 mt-4">
             <button onClick={handleCreate} disabled={saving || !form.title.trim() || !form.date} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {saving ? "Creating..." : "Create Event"}
             </button>
-            <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50">
+            <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormError(""); }} className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50">
               Cancel
             </button>
           </div>

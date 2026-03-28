@@ -17,7 +17,7 @@ serve(async (req) => {
 
     const { data: reservation, error: resError } = await supabase
       .from("reservations")
-      .select("id, user_id, start_time, end_time, court:courts(name)")
+      .select("id, user_id, club_id, start_time, end_time, court:courts(name)")
       .eq("id", reservation_id)
       .single();
 
@@ -45,8 +45,15 @@ serve(async (req) => {
       minute: "2-digit",
     });
 
+    const { data: club } = await supabase
+      .from("clubs")
+      .select("name")
+      .eq("id", reservation.club_id)
+      .single();
+    const clubName = club?.name ?? "";
+
     const courtName = reservation.court?.name ?? "Court";
-    const title = "Reservation Cancelled";
+    const title = clubName ? `${clubName} - Reservation Cancelled` : "Reservation Cancelled";
     const body = `${courtName} on ${dateStr} at ${timeStr} has been cancelled`;
 
     await supabase.from("notifications").insert({

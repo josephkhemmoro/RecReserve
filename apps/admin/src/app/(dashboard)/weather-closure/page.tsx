@@ -79,9 +79,13 @@ export default function WeatherClosurePage() {
 
       // Send notifications to affected users
       const uniqueUserIds = [...new Set(affected.map((r: { user_id: string }) => r.user_id))];
+      const clubName = admin?.clubName ?? "";
+      const closureTitle = clubName
+        ? `${clubName} - Weather Closure`
+        : "Reservation Cancelled — Weather Closure";
       const notifications = uniqueUserIds.map((userId) => ({
         user_id: userId,
-        title: "Reservation Cancelled — Weather Closure",
+        title: closureTitle,
         body: `Your reservation on ${new Date(selectedDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })} has been cancelled due to weather conditions.`,
         type: "cancellation" as const,
         read: false,

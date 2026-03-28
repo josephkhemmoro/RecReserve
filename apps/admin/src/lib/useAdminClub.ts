@@ -6,6 +6,7 @@ import { createClient } from "@/utils/supabase/client";
 interface AdminInfo {
   userId: string;
   clubId: string;
+  clubName: string;
   fullName: string;
 }
 
@@ -30,7 +31,7 @@ export function useAdminClub() {
 
         const { data: profile, error: profileError } = await supabase
           .from("users")
-          .select("id, club_id, full_name")
+          .select("id, club_id, full_name, club:clubs(name)")
           .eq("id", session.user.id)
           .single();
 
@@ -48,15 +49,18 @@ export function useAdminClub() {
           setAdmin({
             userId: profile.id as string,
             clubId: "",
+            clubName: "",
             fullName: (profile.full_name as string) || session.user.email || "Admin",
           });
           setLoading(false);
           return;
         }
 
+        const club = profile.club as { name: string } | null;
         setAdmin({
           userId: profile.id as string,
           clubId: profile.club_id as string,
+          clubName: club?.name || "",
           fullName: (profile.full_name as string) || session.user.email || "Admin",
         });
       } catch (err) {

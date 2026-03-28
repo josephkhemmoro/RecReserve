@@ -17,7 +17,7 @@ serve(async (req) => {
 
     const { data: reservation } = await supabase
       .from("reservations")
-      .select("start_time, end_time, court:courts(name)")
+      .select("start_time, end_time, club_id, court:courts(name)")
       .eq("id", reservation_id)
       .single();
 
@@ -38,8 +38,15 @@ serve(async (req) => {
       minute: "2-digit",
     });
 
+    const { data: club } = await supabase
+      .from("clubs")
+      .select("name")
+      .eq("id", reservation?.club_id)
+      .single();
+    const clubName = club?.name ?? "";
+
     const courtName = reservation?.court?.name ?? "Court";
-    const title = "Good news! A slot opened up 🎉";
+    const title = clubName ? `${clubName} - A slot opened up!` : "A slot opened up!";
     const body = `${courtName} on ${dateStr} at ${timeStr} is now yours`;
 
     await supabase.from("notifications").insert({

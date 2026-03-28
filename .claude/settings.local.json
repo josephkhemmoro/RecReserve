@@ -15,7 +15,12 @@
       "Bash(npx create-expo-app@latest mobile --template blank -- --npm)",
       "Bash(npx create-expo-app@3.2.0 mobile --template blank)",
       "Bash(grep '\"\"expo\"\"' package.json)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git -C /Users/juju/Desktop/RecReserve/RecReserve App log --all --oneline)",
+      "Bash(grep -r .from\\\\\\(/Users/juju/Desktop/RecReserve/RecReserve App --include=*.ts --include=*.js -B 0 -A 0)",
+      "Bash(find /Users/juju/Desktop/RecReserve/RecReserve App -type f \\\\\\(-name *.sql -o -name seed* -o -name init* \\\\\\))",
+      "Bash(find /Users/juju/Desktop/RecReserve/RecReserve App/apps/admin -type f \\\\\\(-name *.ts -o -name *.tsx -o -name *.js \\\\\\))",
+      "Bash(find /Users/juju/Desktop/RecReserve/RecReserve App/apps/admin/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
     ]
   }
 }

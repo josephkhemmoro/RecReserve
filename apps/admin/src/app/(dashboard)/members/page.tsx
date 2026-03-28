@@ -3,39 +3,55 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
-import type { MembershipTierName } from "@recreserve/shared";
+
+interface MembershipTier {
+  id: string;
+  name: string;
+  color: string | null;
+}
 
 interface Member {
   id: string;
   full_name: string;
   email: string;
+  role: string;
   created_at: string;
   membership: {
     id: string;
-    tier: MembershipTierName;
+    tier_id: string | null;
+    tier_name: string | null;
+    tier_color: string | null;
     is_active: boolean;
   } | null;
 }
 
-const TIERS: MembershipTierName[] = ["standard", "premium", "guest"];
-
 export default function MembersPage() {
   const { admin, loading: adminLoading } = useAdminClub();
   const [members, setMembers] = useState<Member[]>([]);
+  const [tiers, setTiers] = useState<MembershipTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creditModal, setCreditModal] = useState<{ userId: string; name: string } | null>(null);
   const [creditAmount, setCreditAmount] = useState("");
   const [savingCredit, setSavingCredit] = useState(false);
 
+  const fetchTiers = useCallback(async (clubId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("membership_tiers")
+      .select("id, name, color")
+      .eq("club_id", clubId)
+      .order("created_at", { ascending: true });
+    setTiers(data ?? []);
+  }, []);
+
   const fetchMembers = useCallback(async (clubId: string) => {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("users")
-        .select("id, full_name, email, created_at")
+        .select("id, full_name, email, role, created_at")
         .eq("club_id", clubId)
-        .eq("role", "player")
         .order("full_name");
 
       if (error) throw error;
@@ -44,24 +60,28 @@ export default function MembersPage() {
 
       const { data: memberships } = await supabase
         .from("memberships")
-        .select("id, user_id, tier, is_active")
+        .select("id, user_id, tier_id, is_active, membership_tier:membership_tiers(name, color)")
         .eq("club_id", clubId)
         .in("user_id", userIds.length > 0 ? userIds : ["__none__"]);
 
-      const membershipMap = new Map<string, { id: string; tier: MembershipTierName; is_active: boolean }>();
+      const membershipMap = new Map<string, Member["membership"]>();
       for (const m of memberships ?? []) {
+        const tier = m.membership_tier as { name: string; color: string | null } | null;
         membershipMap.set(m.user_id as string, {
           id: m.id as string,
-          tier: m.tier as MembershipTierName,
+          tier_id: m.tier_id as string | null,
+          tier_name: tier?.name ?? null,
+          tier_color: tier?.color ?? null,
           is_active: m.is_active as boolean,
         });
       }
 
       setMembers(
-        (data ?? []).map((u: { id: string; full_name: string; email: string; created_at: string }) => ({
+        (data ?? []).map((u: { id: string; full_name: string; email: string; role: string; created_at: string }) => ({
           id: u.id,
           full_name: u.full_name,
           email: u.email,
+          role: u.role,
           created_at: u.created_at,
           membership: membershipMap.get(u.id) ?? null,
         }))
@@ -74,30 +94,46 @@ export default function MembersPage() {
   }, []);
 
   useEffect(() => {
-    if (admin?.clubId) fetchMembers(admin.clubId);
-  }, [admin?.clubId, fetchMembers]);
+    if (admin?.clubId) {
+      fetchTiers(admin.clubId);
+      fetchMembers(admin.clubId);
+    }
+  }, [admin?.clubId, fetchTiers, fetchMembers]);
 
-  const handleTierChange = async (member: Member, tier: MembershipTierName) => {
+  const handleMembershipChange = async (member: Member, tierId: string) => {
     if (!admin?.clubId) return;
     try {
       const supabase = createClient();
-      if (member.membership) {
-        await supabase
+      let result;
+      if (tierId === "") {
+        // Remove membership
+        if (member.membership) {
+          result = await supabase
+            .from("memberships")
+            .delete()
+            .eq("id", member.membership.id);
+        }
+      } else if (member.membership) {
+        result = await supabase
           .from("memberships")
-          .update({ tier })
+          .update({ tier_id: tierId })
           .eq("id", member.membership.id);
       } else {
-        await supabase.from("memberships").insert({
+        result = await supabase.from("memberships").insert({
           user_id: member.id,
           club_id: admin.clubId,
-          tier,
+          tier_id: tierId,
+          tier: "standard",
           start_date: new Date().toISOString().split("T")[0],
           is_active: true,
         });
       }
+      if (result?.error) {
+        console.error("Supabase error updating membership:", result.error);
+      }
       fetchMembers(admin.clubId);
     } catch (err) {
-      console.error("Error updating tier:", err);
+      console.error("Error updating membership:", err);
     }
   };
 
@@ -117,17 +153,22 @@ export default function MembersPage() {
 
   const handleAddCredit = async () => {
     if (!creditModal || !admin?.clubId || !creditAmount) return;
+    const amount = parseFloat(creditAmount);
+    if (isNaN(amount) || amount <= 0) return;
     setSavingCredit(true);
     try {
       const supabase = createClient();
-      // Create a credit entry as a membership record with note
-      await supabase.from("memberships").insert({
-        user_id: creditModal.userId,
-        club_id: admin.clubId,
-        tier: "standard",
-        start_date: new Date().toISOString().split("T")[0],
-        is_active: true,
-      });
+      const { data: user } = await supabase
+        .from("users")
+        .select("credit_balance")
+        .eq("id", creditModal.userId)
+        .single();
+      const current = Number(user?.credit_balance ?? 0);
+      const { error } = await supabase
+        .from("users")
+        .update({ credit_balance: current + amount })
+        .eq("id", creditModal.userId);
+      if (error) throw error;
       setCreditModal(null);
       setCreditAmount("");
       fetchMembers(admin.clubId);
@@ -174,7 +215,8 @@ export default function MembersPage() {
               <tr className="border-b border-slate-100">
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Name</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Tier</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Role</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Membership</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Joined</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">Actions</th>
@@ -186,15 +228,29 @@ export default function MembersPage() {
                   <td className="px-6 py-3 text-sm font-medium text-slate-900">{m.full_name}</td>
                   <td className="px-6 py-3 text-sm text-slate-600">{m.email}</td>
                   <td className="px-6 py-3">
-                    <select
-                      value={m.membership?.tier ?? "standard"}
-                      onChange={(e) => handleTierChange(m, e.target.value as MembershipTierName)}
-                      className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900"
-                    >
-                      {TIERS.map((t) => (
-                        <option key={t} value={t} className="capitalize">{t}</option>
-                      ))}
-                    </select>
+                    <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold capitalize ${
+                      m.role === "admin" || m.role === "owner"
+                        ? "bg-purple-50 text-purple-700"
+                        : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {m.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-3">
+                    {tiers.length > 0 ? (
+                      <select
+                        value={m.membership?.tier_id ?? ""}
+                        onChange={(e) => handleMembershipChange(m, e.target.value)}
+                        className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900"
+                      >
+                        <option value="">None</option>
+                        {tiers.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-sm text-slate-400">No memberships created</span>
+                    )}
                   </td>
                   <td className="px-6 py-3 text-sm text-slate-600">
                     {new Date(m.created_at).toLocaleDateString()}
@@ -220,7 +276,7 @@ export default function MembersPage() {
                       </button>
                     )}
                     <button
-                      onClick={() => setCreditModal({ userId: m.id, name: m.full_name })}
+                      onClick={() => { setCreditModal({ userId: m.id, name: m.full_name }); setCreditAmount(""); }}
                       className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                     >
                       Add Credit

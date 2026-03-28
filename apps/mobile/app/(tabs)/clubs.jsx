@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  RefreshControl,
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
@@ -23,10 +24,17 @@ export default function ClubsScreen() {
   const [searching, setSearching] = useState(false)
   const [joining, setJoining] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Refresh memberships on mount
   useEffect(() => {
     refreshMemberships()
+  }, [])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await refreshMemberships()
+    setRefreshing(false)
   }, [])
 
   const refreshMemberships = async () => {
@@ -139,139 +147,146 @@ export default function ClubsScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>Clubs</Text>
-      </View>
+      <FlatList
+        data={results}
+        keyExtractor={(item) => item.id}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListHeaderComponent={
+          <>
+            <View style={styles.header}>
+              <Text style={styles.title}>Clubs</Text>
+            </View>
 
-      {/* My Clubs */}
-      {memberships.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>My Clubs</Text>
-          {memberships.map((m) => (
-            <View key={m.id} style={styles.clubCard}>
-              <TouchableOpacity
-                style={styles.clubCardMain}
-                onPress={() => handleSelect(m)}
-              >
-                <View style={styles.clubAvatar}>
-                  <Text style={styles.clubAvatarText}>
-                    {m.club?.name?.charAt(0) || 'C'}
-                  </Text>
-                </View>
-                <View style={styles.clubInfo}>
-                  <Text style={styles.clubName}>{m.club?.name || 'Club'}</Text>
-                  {m.club?.location && (
-                    <Text style={styles.clubLocation}>{m.club.location}</Text>
-                  )}
-                </View>
-                {selectedClub?.id === m.club_id ? (
-                  <View style={styles.activeBadge}>
-                    <Text style={styles.activeBadgeText}>Active</Text>
+            {/* My Clubs */}
+            {memberships.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>My Clubs</Text>
+                {memberships.map((m) => (
+                  <View key={m.id} style={styles.clubCard}>
+                    <TouchableOpacity
+                      style={styles.clubCardMain}
+                      onPress={() => handleSelect(m)}
+                    >
+                      <View style={styles.clubAvatar}>
+                        <Text style={styles.clubAvatarText}>
+                          {m.club?.name?.charAt(0) || 'C'}
+                        </Text>
+                      </View>
+                      <View style={styles.clubInfo}>
+                        <Text style={styles.clubName}>{m.club?.name || 'Club'}</Text>
+                        {m.club?.location && (
+                          <Text style={styles.clubLocation}>{m.club.location}</Text>
+                        )}
+                      </View>
+                      {selectedClub?.id === m.club_id ? (
+                        <View style={styles.activeBadge}>
+                          <Text style={styles.activeBadgeText}>Active</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.selectBadge}>
+                          <Text style={styles.selectBadgeText}>Select</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                    {selectedClub?.id !== m.club_id && (
+                      <TouchableOpacity
+                        style={styles.leaveButton}
+                        onPress={() => handleLeave(m)}
+                      >
+                        <Text style={styles.leaveButtonText}>Leave</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
-                ) : (
-                  <View style={styles.selectBadge}>
-                    <Text style={styles.selectBadgeText}>Select</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-              {selectedClub?.id !== m.club_id && (
+                ))}
+              </View>
+            )}
+
+            {/* No clubs message */}
+            {memberships.length === 0 && (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No clubs yet</Text>
+                <Text style={styles.emptySubtitle}>
+                  Search for a club below to join and start booking courts
+                </Text>
+              </View>
+            )}
+
+            {/* Search */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Find a Club</Text>
+              <View style={styles.searchRow}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by club name..."
+                  placeholderTextColor="#9ca3af"
+                  value={search}
+                  onChangeText={setSearch}
+                  onSubmitEditing={handleSearch}
+                  returnKeyType="search"
+                />
                 <TouchableOpacity
-                  style={styles.leaveButton}
-                  onPress={() => handleLeave(m)}
+                  style={styles.searchButton}
+                  onPress={handleSearch}
+                  disabled={searching || !search.trim()}
                 >
-                  <Text style={styles.leaveButtonText}>Leave</Text>
+                  {searching ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.searchButtonText}>Search</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          hasSearched && !searching ? (
+            <View style={styles.emptySearch}>
+              <Text style={styles.emptySearchText}>No clubs found</Text>
+            </View>
+          ) : null
+        }
+        renderItem={({ item }) => {
+          const alreadyMember = isMember(item.id)
+          return (
+            <View style={styles.resultCard}>
+              <View style={styles.clubAvatar}>
+                <Text style={styles.clubAvatarText}>
+                  {item.name.charAt(0)}
+                </Text>
+              </View>
+              <View style={styles.clubInfo}>
+                <Text style={styles.clubName}>{item.name}</Text>
+                {item.location && (
+                  <Text style={styles.clubLocation}>{item.location}</Text>
+                )}
+              </View>
+              {alreadyMember ? (
+                <View style={styles.memberBadge}>
+                  <Text style={styles.memberBadgeText}>Member</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.joinButton, joining === item.id && styles.joinButtonDisabled]}
+                  onPress={() => handleJoin(item)}
+                  disabled={joining === item.id}
+                >
+                  {joining === item.id ? (
+                    <ActivityIndicator size="small" color="#ffffff" />
+                  ) : (
+                    <Text style={styles.joinButtonText}>Join</Text>
+                  )}
                 </TouchableOpacity>
               )}
             </View>
-          ))}
-        </View>
-      )}
-
-      {/* No clubs message */}
-      {memberships.length === 0 && (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No clubs yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Search for a club below to join and start booking courts
-          </Text>
-        </View>
-      )}
-
-      {/* Search */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Find a Club</Text>
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by club name..."
-            placeholderTextColor="#9ca3af"
-            value={search}
-            onChangeText={setSearch}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={handleSearch}
-            disabled={searching || !search.trim()}
-          >
-            {searching ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Text style={styles.searchButtonText}>Search</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          style={styles.resultsList}
-          keyboardShouldPersistTaps="handled"
-          ListEmptyComponent={
-            hasSearched && !searching ? (
-              <View style={styles.emptySearch}>
-                <Text style={styles.emptySearchText}>No clubs found</Text>
-              </View>
-            ) : null
-          }
-          renderItem={({ item }) => {
-            const alreadyMember = isMember(item.id)
-            return (
-              <View style={styles.resultCard}>
-                <View style={styles.clubAvatar}>
-                  <Text style={styles.clubAvatarText}>
-                    {item.name.charAt(0)}
-                  </Text>
-                </View>
-                <View style={styles.clubInfo}>
-                  <Text style={styles.clubName}>{item.name}</Text>
-                  {item.location && (
-                    <Text style={styles.clubLocation}>{item.location}</Text>
-                  )}
-                </View>
-                {alreadyMember ? (
-                  <View style={styles.memberBadge}>
-                    <Text style={styles.memberBadgeText}>Member</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.joinButton, joining === item.id && styles.joinButtonDisabled]}
-                    onPress={() => handleJoin(item)}
-                    disabled={joining === item.id}
-                  >
-                    {joining === item.id ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <Text style={styles.joinButtonText}>Join</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
-              </View>
-            )
-          }}
-        />
-      </View>
+          )
+        }}
+      />
     </KeyboardAvoidingView>
   )
 }

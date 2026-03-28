@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  ScrollView,
+  RefreshControl,
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
@@ -17,10 +19,17 @@ export default function SportSelectionScreen() {
   const { selectedClub } = useClubStore()
   const { setSport } = useBookingStore()
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [sportCounts, setSportCounts] = useState({ tennis: 0, pickleball: 0 })
 
   useEffect(() => {
     if (selectedClub?.id) fetchSports()
+  }, [selectedClub?.id])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await fetchSports()
+    setRefreshing(false)
   }, [selectedClub?.id])
 
   const fetchSports = async () => {
@@ -84,7 +93,14 @@ export default function SportSelectionScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ flexGrow: 1 }}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
           <Ionicons name="arrow-back" size={22} color="#2563eb" />
@@ -129,7 +145,7 @@ export default function SportSelectionScreen() {
           </TouchableOpacity>
         )}
       </View>
-    </View>
+    </ScrollView>
   )
 }
 

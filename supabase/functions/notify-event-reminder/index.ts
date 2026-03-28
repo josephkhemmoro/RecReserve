@@ -12,7 +12,7 @@ serve(async (_req) => {
     // Find events starting in the next 24 hours
     const { data: events, error } = await supabase
       .from("events")
-      .select("id, title, start_time")
+      .select("id, title, start_time, club_id")
       .gte("start_time", now.toISOString())
       .lte("start_time", twentyFourHoursFromNow.toISOString());
 
@@ -35,7 +35,15 @@ serve(async (_req) => {
           .eq("id", reg.user_id)
           .single();
 
-        const title = `Reminder: ${event.title} is tomorrow`;
+        // Fetch club name
+        const { data: club } = await supabase
+          .from("clubs")
+          .select("name")
+          .eq("id", event.club_id)
+          .single();
+        const clubName = club?.name ?? "";
+
+        const title = clubName ? `${clubName} - ${event.title} is tomorrow` : `Reminder: ${event.title} is tomorrow`;
         const startDate = new Date(event.start_time);
         const timeStr = startDate.toLocaleTimeString("en-US", {
           hour: "numeric",
