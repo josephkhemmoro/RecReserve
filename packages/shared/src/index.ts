@@ -4,7 +4,7 @@ export type UserRole = 'admin' | 'player'
 
 export type ReservationStatus = 'confirmed' | 'cancelled' | 'completed' | 'no_show'
 
-export type MembershipTier = 'standard' | 'premium' | 'guest'
+export type MembershipTierName = 'standard' | 'premium' | 'guest'
 
 export type EventType = 'open_play' | 'clinic' | 'tournament' | 'lesson'
 
@@ -48,6 +48,8 @@ export interface Court {
   name: string
   sport: Sport
   is_active: boolean
+  hourly_rate: number
+  is_free: boolean
   created_at: string
 }
 
@@ -96,16 +98,37 @@ export interface Waitlist {
   created_at: string
 }
 
+export interface MembershipTier {
+  id: string
+  club_id: string
+  name: string
+  discount_percent: number
+  can_book_free: boolean
+  color?: string
+  created_at: string
+}
+
 export interface Membership {
   id: string
   user_id: string
   club_id: string
-  tier: MembershipTier
+  tier: MembershipTierName
+  tier_id: string | null
   start_date: string
   end_date?: string
   is_active: boolean
   stripe_subscription_id?: string
   created_at: string
+  membership_tier?: MembershipTier
+}
+
+export interface BookingPriceBreakdown {
+  court_id: string
+  hourly_rate: number
+  duration_minutes: number
+  discount_percent: number
+  final_price: number
+  is_free: boolean
 }
 
 export interface Event {

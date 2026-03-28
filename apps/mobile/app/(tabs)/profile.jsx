@@ -96,16 +96,19 @@ export default function ProfileScreen() {
     setUploading(true)
     try {
       const file = result.assets[0]
-      const ext = file.uri.split('.').pop() || 'jpg'
-      const filePath = `avatars/${user?.id}.${ext}`
+      const ext = file.uri.split('.').pop()?.toLowerCase() || 'jpg'
+      const filePath = `${user?.id}.${ext}`
 
-      // Read file as blob
+      // Read file as ArrayBuffer (blob doesn't work reliably in React Native)
       const response = await fetch(file.uri)
-      const blob = await response.blob()
+      const arrayBuffer = await response.arrayBuffer()
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, blob, { upsert: true, contentType: `image/${ext}` })
+        .upload(filePath, arrayBuffer, {
+          upsert: true,
+          contentType: file.mimeType || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+        })
 
       if (uploadError) throw uploadError
 
@@ -124,7 +127,7 @@ export default function ProfileScreen() {
       setAvatarUrl(publicUrl)
     } catch (err) {
       console.error('Upload error:', err)
-      Alert.alert('Error', 'Failed to upload avatar')
+      Alert.alert('Error', err.message || 'Failed to upload avatar')
     } finally {
       setUploading(false)
     }

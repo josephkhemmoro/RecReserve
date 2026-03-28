@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
-import type { MembershipTier } from "@recreserve/shared";
+import type { MembershipTierName } from "@recreserve/shared";
 
 interface Member {
   id: string;
@@ -12,12 +12,12 @@ interface Member {
   created_at: string;
   membership: {
     id: string;
-    tier: MembershipTier;
+    tier: MembershipTierName;
     is_active: boolean;
   } | null;
 }
 
-const TIERS: MembershipTier[] = ["standard", "premium", "guest"];
+const TIERS: MembershipTierName[] = ["standard", "premium", "guest"];
 
 export default function MembersPage() {
   const { admin, loading: adminLoading } = useAdminClub();
@@ -48,11 +48,11 @@ export default function MembersPage() {
         .eq("club_id", clubId)
         .in("user_id", userIds.length > 0 ? userIds : ["__none__"]);
 
-      const membershipMap = new Map<string, { id: string; tier: MembershipTier; is_active: boolean }>();
+      const membershipMap = new Map<string, { id: string; tier: MembershipTierName; is_active: boolean }>();
       for (const m of memberships ?? []) {
         membershipMap.set(m.user_id as string, {
           id: m.id as string,
-          tier: m.tier as MembershipTier,
+          tier: m.tier as MembershipTierName,
           is_active: m.is_active as boolean,
         });
       }
@@ -77,7 +77,7 @@ export default function MembersPage() {
     if (admin?.clubId) fetchMembers(admin.clubId);
   }, [admin?.clubId, fetchMembers]);
 
-  const handleTierChange = async (member: Member, tier: MembershipTier) => {
+  const handleTierChange = async (member: Member, tier: MembershipTierName) => {
     if (!admin?.clubId) return;
     try {
       const supabase = createClient();
@@ -188,7 +188,7 @@ export default function MembersPage() {
                   <td className="px-6 py-3">
                     <select
                       value={m.membership?.tier ?? "standard"}
-                      onChange={(e) => handleTierChange(m, e.target.value as MembershipTier)}
+                      onChange={(e) => handleTierChange(m, e.target.value as MembershipTierName)}
                       className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900"
                     >
                       {TIERS.map((t) => (
