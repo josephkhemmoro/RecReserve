@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "5d4c7585-707a-45be-9f80-8fc1a18f98b9"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.jujukhem.recreserve",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

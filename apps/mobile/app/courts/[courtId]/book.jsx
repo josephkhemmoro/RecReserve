@@ -428,8 +428,8 @@ const styles = StyleSheet.create({
     borderColor: '#2563eb',
   },
   slotInRange: {
-    backgroundColor: '#dbeafe',
-    borderColor: '#93c5fd',
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
   },
 
   slotTime: { fontSize: 16, fontWeight: '600', flex: 1 },
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2563eb',
+    backgroundColor: '#ffffff',
   },
 
   emptyState: { alignItems: 'center', paddingVertical: 60, gap: 8 },
