@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -172,11 +173,15 @@ export default function ClubsScreen() {
                       style={styles.clubCardMain}
                       onPress={() => handleSelect(m)}
                     >
-                      <View style={styles.clubAvatar}>
-                        <Text style={styles.clubAvatarText}>
-                          {m.club?.name?.charAt(0) || 'C'}
-                        </Text>
-                      </View>
+                      {m.club?.logo_url ? (
+                        <Image source={{ uri: m.club.logo_url }} style={styles.clubLogoImage} />
+                      ) : (
+                        <View style={styles.clubAvatar}>
+                          <Text style={styles.clubAvatarText}>
+                            {m.club?.name?.charAt(0) || 'C'}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.clubInfo}>
                         <Text style={styles.clubName}>{m.club?.name || 'Club'}</Text>
                         {m.club?.location && (
@@ -255,11 +260,15 @@ export default function ClubsScreen() {
           const alreadyMember = isMember(item.id)
           return (
             <View style={styles.resultCard}>
-              <View style={styles.clubAvatar}>
-                <Text style={styles.clubAvatarText}>
-                  {item.name.charAt(0)}
-                </Text>
-              </View>
+              {item.logo_url ? (
+                <Image source={{ uri: item.logo_url }} style={styles.clubLogoImage} />
+              ) : (
+                <View style={styles.clubAvatar}>
+                  <Text style={styles.clubAvatarText}>
+                    {item.name.charAt(0)}
+                  </Text>
+                </View>
+              )}
               <View style={styles.clubInfo}>
                 <Text style={styles.clubName}>{item.name}</Text>
                 {item.location && (
@@ -336,6 +345,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+  },
+  clubLogoImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    marginRight: 12,
+    backgroundColor: '#f1f5f9',
   },
   clubAvatarText: {
     fontSize: 18,
