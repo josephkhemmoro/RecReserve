@@ -51,7 +51,7 @@ export async function registerForPushNotifications(userId) {
 
   try {
     const tokenData = await Notifications.getExpoPushTokenAsync({
-      projectId: 'your-project-id', // Will be overridden by app.json config
+      projectId: '5d4c7585-707a-45be-9f80-8fc1a18f98b9',
     })
 
     const pushToken = tokenData.data
@@ -84,6 +84,8 @@ export function getNotificationRoute(type, data) {
       return '/(tabs)/reservations'
     case 'event_reminder':
       return '/(tabs)/clubs' // Events are club-specific
+    case 'announcement':
+      return '/(tabs)/notifications'
     default:
       return '/(tabs)/notifications'
   }

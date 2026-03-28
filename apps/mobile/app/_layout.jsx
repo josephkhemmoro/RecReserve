@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import { registerForPushNotifications, getNotificationRoute } from '../lib/notifications'
 import { useAuthStore } from '../store/authStore'
 import { useClubStore } from '../store/clubStore'
+import { useMembershipStore } from '../store/membershipStore'
 import { ErrorBoundary } from '../components/ui/ErrorBoundary'
 import { NetworkToast } from '../components/ui/NetworkToast'
 
@@ -30,6 +31,7 @@ function RootLayoutInner() {
   const segments = useSegments()
   const { session, loading, setSession, setUser, setLoading } = useAuthStore()
   const { setMemberships, setSelectedClub } = useClubStore()
+  const { fetchMembershipTier } = useMembershipStore()
   const notificationResponseListener = useRef()
   const [networkError, setNetworkError] = useState(false)
 
@@ -124,6 +126,7 @@ function RootLayoutInner() {
             setMemberships(refreshed || [])
             if (refreshed && refreshed.length === 1 && refreshed[0].club) {
               setSelectedClub(refreshed[0].club)
+              fetchMembershipTier(session.user.id, refreshed[0].club.id)
             }
             return
           }
@@ -133,6 +136,7 @@ function RootLayoutInner() {
 
         if (memberships && memberships.length === 1 && memberships[0].club) {
           setSelectedClub(memberships[0].club)
+          fetchMembershipTier(session.user.id, memberships[0].club.id)
         }
       } catch (err) {
         console.error('Error checking memberships:', err)

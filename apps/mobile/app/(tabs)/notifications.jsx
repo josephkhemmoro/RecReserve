@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { getNotificationRoute } from '../../lib/notifications'
@@ -126,21 +127,38 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
-  const renderNotification = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.notificationCard, !item.read && styles.notificationUnread]}
-      onPress={() => handleTap(item)}
-    >
-      {!item.read && <View style={styles.unreadDot} />}
-      <View style={styles.notificationContent}>
-        <Text style={styles.notificationTitle}>{item.title}</Text>
-        <Text style={styles.notificationBody} numberOfLines={2}>
-          {item.body}
-        </Text>
-        <Text style={styles.notificationTime}>{timeAgo(item.created_at)}</Text>
-      </View>
-    </TouchableOpacity>
-  )
+  const renderNotification = ({ item }) => {
+    const isAnnouncement = item.type === 'announcement'
+    return (
+      <TouchableOpacity
+        style={[
+          styles.notificationCard,
+          !item.read && styles.notificationUnread,
+          isAnnouncement && styles.announcementCard,
+          isAnnouncement && !item.read && styles.announcementUnread,
+        ]}
+        onPress={() => handleTap(item)}
+      >
+        {isAnnouncement ? (
+          <View style={styles.announcementIcon}>
+            <Ionicons name="megaphone-outline" size={16} color="#7c3aed" />
+          </View>
+        ) : (
+          !item.read && <View style={styles.unreadDot} />
+        )}
+        <View style={styles.notificationContent}>
+          {isAnnouncement && (
+            <Text style={styles.announcementLabel}>ANNOUNCEMENT</Text>
+          )}
+          <Text style={styles.notificationTitle}>{item.title}</Text>
+          <Text style={styles.notificationBody} numberOfLines={2}>
+            {item.body}
+          </Text>
+          <Text style={styles.notificationTime}>{timeAgo(item.created_at)}</Text>
+        </View>
+      </TouchableOpacity>
+    )
+  }
 
   return (
     <View style={styles.container}>
@@ -225,6 +243,31 @@ const styles = StyleSheet.create({
   notificationUnread: {
     backgroundColor: '#eff6ff',
     borderColor: '#dbeafe',
+  },
+  announcementCard: {
+    backgroundColor: '#faf5ff',
+    borderColor: '#ede9fe',
+  },
+  announcementUnread: {
+    backgroundColor: '#f3e8ff',
+    borderColor: '#ddd6fe',
+  },
+  announcementIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#ede9fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    marginRight: 10,
+  },
+  announcementLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#7c3aed',
+    letterSpacing: 0.5,
+    marginBottom: 2,
   },
   unreadDot: {
     width: 8,

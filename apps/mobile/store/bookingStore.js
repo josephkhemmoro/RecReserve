@@ -1,21 +1,40 @@
 import { create } from 'zustand'
 
 export const useBookingStore = create((set) => ({
+  selectedSport: null,
   selectedCourt: null,
   selectedDate: null,
-  selectedSlot: null,
-  duration: 60,
-  price: 0,
+  startTime: null,
+  endTime: null,
+  durationMinutes: 0,
+  priceBreakdown: null,
+  // Recurring
+  repeatWeekly: false,
+  repeatWeeks: 4,
+  // Guests
+  guests: [],
+
+  setSport: (sport) => set({ selectedSport: sport }),
   setSelectedCourt: (court) => set({ selectedCourt: court }),
   setSelectedDate: (date) => set({ selectedDate: date }),
-  setSelectedSlot: (slot) => set({ selectedSlot: slot }),
-  setDuration: (duration) => set({ duration }),
-  setPrice: (price) => set({ price }),
-  clearBooking: () => set({
-    selectedCourt: null,
-    selectedDate: null,
-    selectedSlot: null,
-    duration: 60,
-    price: 0,
-  }),
+  setTimeRange: (startTime, endTime, durationMinutes) =>
+    set({ startTime, endTime, durationMinutes }),
+  setPriceBreakdown: (breakdown) => set({ priceBreakdown: breakdown }),
+  setRepeatWeekly: (val) => set({ repeatWeekly: val }),
+  setRepeatWeeks: (val) => set({ repeatWeeks: val }),
+  setGuests: (guests) => set({ guests }),
+
+  clearBooking: () =>
+    set({
+      selectedSport: null,
+      selectedCourt: null,
+      selectedDate: null,
+      startTime: null,
+      endTime: null,
+      durationMinutes: 0,
+      priceBreakdown: null,
+      repeatWeekly: false,
+      repeatWeeks: 4,
+      guests: [],
+    }),
 }))

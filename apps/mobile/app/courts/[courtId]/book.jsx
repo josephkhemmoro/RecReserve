@@ -6,57 +6,43 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native'
 import { useRouter, useLocalSearchParams } from 'expo-router'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { supabase } from '../../../lib/supabase'
-import { useAuthStore } from '../../../store/authStore'
 import { useBookingStore } from '../../../store/bookingStore'
+import { usePricing } from '../../../lib/usePricing'
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const SLOT_INCREMENT = 30 // 30-minute increments
 
-function generateDates(count) {
-  const dates = []
-  const today = new Date()
-  for (let i = 0; i < count; i++) {
-    const d = new Date(today)
-    d.setDate(today.getDate() + i)
-    dates.push(d)
-  }
-  return dates
-}
-
-// Generate time slots from court_availability open_time/close_time
-function generateSlots(availability, slotDuration) {
+function generateTimeSlots(availability, dayOfWeek) {
+  const dayAvail = availability.filter((a) => a.day_of_week === dayOfWeek)
   const slots = []
-  if (!availability) return slots
 
-  for (const avail of availability) {
+  for (const avail of dayAvail) {
     const [startH, startM] = avail.open_time.split(':').map(Number)
     const [endH, endM] = avail.close_time.split(':').map(Number)
     const startMins = startH * 60 + startM
     const endMins = endH * 60 + endM
 
-    for (let m = startMins; m + slotDuration <= endMins; m += slotDuration) {
-      const h = Math.floor(m / 60)
-      const min = m % 60
-      const endSlotM = m + slotDuration
-      const endSlotH = Math.floor(endSlotM / 60)
-      const endSlotMin = endSlotM % 60
-
+    for (let m = startMins; m < endMins; m += SLOT_INCREMENT) {
       slots.push({
-        startTime: `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
-        endTime: `${String(endSlotH).padStart(2, '0')}:${String(endSlotMin).padStart(2, '0')}`,
-        startMinutes: m,
+        minutes: m,
+        time: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`,
       })
     }
+    // Add close time as a possible end-time marker
+    slots.push({
+      minutes: endMins,
+      time: `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`,
+      isEndOnly: true,
+    })
   }
 
-  return slots.sort((a, b) => a.startMinutes - b.startMinutes)
+  return slots.sort((a, b) => a.minutes - b.minutes)
 }
 
-function formatSlotTime(time24) {
+function formatTime12(time24) {
   const [h, m] = time24.split(':').map(Number)
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 || 12
@@ -65,41 +51,44 @@ function formatSlotTime(time24) {
 
 export default function BookCourtScreen() {
   const router = useRouter()
-  const { courtId } = useLocalSearchParams()
-  const { user } = useAuthStore()
-  const { setSelectedCourt, setSelectedDate, setSelectedSlot, setDuration, setPrice } = useBookingStore()
+  const { courtId, date } = useLocalSearchParams()
+  const {
+    selectedCourt,
+    setTimeRange,
+    setPriceBreakdown,
+  } = useBookingStore()
 
-  const [court, setCourt] = useState(null)
-  const [bookingRules, setBookingRules] = useState(null)
+  const [court, setCourt] = useState(selectedCourt)
   const [availability, setAvailability] = useState([])
   const [reservations, setReservations] = useState([])
-  const [userWaitlistIds, setUserWaitlistIds] = useState(new Set())
   const [loading, setLoading] = useState(true)
-  const [selectedDateIdx, setSelectedDateIdx] = useState(0)
+  const [startSlot, setStartSlot] = useState(null)
+  const [endSlot, setEndSlot] = useState(null)
 
-  const dates = useMemo(() => {
-    const maxDays = bookingRules?.advance_booking_days || 7
-    return generateDates(maxDays)
-  }, [bookingRules?.advance_booking_days])
+  const durationMinutes = startSlot && endSlot ? endSlot.minutes - startSlot.minutes : 0
+  const hourlyRate = court?.hourly_rate ?? 0
+  const pricing = usePricing(hourlyRate, durationMinutes)
 
-  const selectedDate = dates[selectedDateIdx]
+  const dateObj = useMemo(() => new Date(date + 'T00:00:00'), [date])
+  const dayOfWeek = dateObj.getDay()
+
+  const allSlots = useMemo(
+    () => generateTimeSlots(availability, dayOfWeek),
+    [availability, dayOfWeek]
+  )
+
+  // Filter out end-only markers for display (only used as valid end times)
+  const displaySlots = allSlots.filter((s) => !s.isEndOnly)
 
   useEffect(() => {
-    fetchCourtData()
-  }, [courtId])
+    fetchData()
+  }, [courtId, date])
 
-  useEffect(() => {
-    if (selectedDate && court) {
-      fetchReservationsForDate()
-    }
-  }, [selectedDateIdx, court?.id])
-
-  // Realtime subscription: refresh slots when reservations change
+  // Realtime subscription
   useEffect(() => {
     if (!courtId) return
-
     const channel = supabase
-      .channel(`reservations-${courtId}`)
+      .channel(`reservations-book-${courtId}`)
       .on(
         'postgres_changes',
         {
@@ -108,39 +97,26 @@ export default function BookCourtScreen() {
           table: 'reservations',
           filter: `court_id=eq.${courtId}`,
         },
-        () => {
-          fetchReservationsForDate()
-        }
+        () => fetchReservations()
       )
       .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [courtId, selectedDateIdx])
+    return () => supabase.removeChannel(channel)
+  }, [courtId, date])
 
-  const fetchCourtData = async () => {
+  const fetchData = async () => {
     try {
       const [courtRes, availRes] = await Promise.all([
-        supabase.from('courts').select('*, club_id').eq('id', courtId).single(),
+        court
+          ? Promise.resolve({ data: court, error: null })
+          : supabase.from('courts').select('*').eq('id', courtId).single(),
         supabase.from('court_availability').select('*').eq('court_id', courtId),
       ])
 
       if (courtRes.error) throw courtRes.error
       setCourt(courtRes.data)
-
       setAvailability(availRes.data || [])
-
-      // Fetch booking rules for this court's club
-      if (courtRes.data?.club_id) {
-        const { data: rules } = await supabase
-          .from('booking_rules')
-          .select('*')
-          .eq('club_id', courtRes.data.club_id)
-          .single()
-
-        if (rules) setBookingRules(rules)
-      }
+      await fetchReservations()
     } catch (err) {
       console.error('Error fetching court data:', err)
     } finally {
@@ -148,120 +124,107 @@ export default function BookCourtScreen() {
     }
   }
 
-  const fetchReservationsForDate = async () => {
-    const dayStart = new Date(selectedDate)
-    dayStart.setHours(0, 0, 0, 0)
-    const dayEnd = new Date(selectedDate)
-    dayEnd.setHours(23, 59, 59, 999)
-
+  const fetchReservations = async () => {
     try {
+      const dayStart = `${date}T00:00:00`
+      const dayEnd = `${date}T23:59:59`
+
       const { data } = await supabase
         .from('reservations')
         .select('id, start_time, end_time, status')
         .eq('court_id', courtId)
         .eq('status', 'confirmed')
-        .gte('start_time', dayStart.toISOString())
-        .lte('start_time', dayEnd.toISOString())
+        .gte('start_time', dayStart)
+        .lte('start_time', dayEnd)
 
       setReservations(data || [])
-
-      // Fetch waitlist entries for these reservations that belong to current user
-      if (data && data.length > 0) {
-        const reservationIds = data.map((r) => r.id)
-        const { data: waitlistData } = await supabase
-          .from('waitlists')
-          .select('reservation_id')
-          .eq('user_id', user?.id)
-          .in('reservation_id', reservationIds)
-
-        setUserWaitlistIds(new Set((waitlistData || []).map((w) => w.reservation_id)))
-      } else {
-        setUserWaitlistIds(new Set())
-      }
     } catch (err) {
       console.error('Error fetching reservations:', err)
     }
   }
 
-  const dayOfWeek = selectedDate ? selectedDate.getDay() : 0
-  const dayAvailability = availability.filter((a) => a.day_of_week === dayOfWeek)
-  const slotDuration = bookingRules?.max_booking_duration_mins || 60
-  const slots = useMemo(
-    () => generateSlots(dayAvailability, slotDuration),
-    [dayAvailability, slotDuration]
-  )
+  const isSlotBooked = (slot) => {
+    const slotStart = slot.minutes
+    const slotEnd = slotStart + SLOT_INCREMENT
 
-  const getSlotStatus = (slot) => {
-    const slotStart = new Date(selectedDate)
-    const [sh, sm] = slot.startTime.split(':').map(Number)
-    slotStart.setHours(sh, sm, 0, 0)
-
-    const slotEnd = new Date(selectedDate)
-    const [eh, em] = slot.endTime.split(':').map(Number)
-    slotEnd.setHours(eh, em, 0, 0)
-
-    if (slotStart < new Date()) return { status: 'past', reservationId: null }
-
-    // Find overlapping reservation
-    const overlapping = reservations.find((r) => {
+    return reservations.some((r) => {
       const rStart = new Date(r.start_time)
+      const rStartMins = rStart.getHours() * 60 + rStart.getMinutes()
       const rEnd = new Date(r.end_time)
-      return slotStart < rEnd && slotEnd > rStart
+      const rEndMins = rEnd.getHours() * 60 + rEnd.getMinutes()
+      return slotStart < rEndMins && slotEnd > rStartMins
     })
+  }
 
-    if (overlapping) {
-      const onWaitlist = userWaitlistIds.has(overlapping.id)
-      return {
-        status: onWaitlist ? 'waitlisted' : 'booked',
-        reservationId: overlapping.id,
+  const isSlotPast = (slot) => {
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    if (date > today) return false
+    if (date < today) return true
+    const nowMins = now.getHours() * 60 + now.getMinutes()
+    return slot.minutes < nowMins
+  }
+
+  const isSlotInRange = (slot) => {
+    if (!startSlot || !endSlot) return false
+    return slot.minutes >= startSlot.minutes && slot.minutes < endSlot.minutes
+  }
+
+  const isSlotStart = (slot) => startSlot && slot.minutes === startSlot.minutes
+
+  // Check if selecting this end would cross a booked slot
+  const wouldCrossBooking = (start, end) => {
+    return displaySlots.some((s) => {
+      return s.minutes >= start.minutes && s.minutes < end.minutes && isSlotBooked(s)
+    })
+  }
+
+  const handleSlotPress = (slot) => {
+    if (isSlotBooked(slot) || isSlotPast(slot)) return
+
+    if (!startSlot) {
+      // First tap: select start
+      setStartSlot(slot)
+      setEndSlot(null)
+    } else if (!endSlot) {
+      if (slot.minutes <= startSlot.minutes) {
+        // Tapped before or same as start — reset to this as new start
+        setStartSlot(slot)
+        setEndSlot(null)
+      } else {
+        // Check for bookings between start and this slot
+        const candidateEnd = { minutes: slot.minutes + SLOT_INCREMENT, time: '' }
+        if (wouldCrossBooking(startSlot, candidateEnd)) {
+          // Can't cross a booked slot — reset
+          setStartSlot(slot)
+          setEndSlot(null)
+        } else {
+          setEndSlot({ minutes: slot.minutes + SLOT_INCREMENT, time: '' })
+        }
       }
-    }
-
-    return { status: 'available', reservationId: null }
-  }
-
-  const handleSlotPress = (slot, slotInfo) => {
-    if (slotInfo.status === 'available') {
-      const dateStr = selectedDate.toISOString().split('T')[0]
-
-      setSelectedCourt(court)
-      setSelectedDate(dateStr)
-      setSelectedSlot(slot)
-      setDuration(slotDuration)
-      setPrice(0) // Price determined by edge function / club config
-
-      router.push('/booking/confirm')
-    } else if (slotInfo.status === 'booked' && slotInfo.reservationId) {
-      handleJoinWaitlist(slotInfo.reservationId)
+    } else {
+      // Both selected — start over
+      setStartSlot(slot)
+      setEndSlot(null)
     }
   }
 
-  const handleJoinWaitlist = async (reservationId) => {
-    try {
-      // Get current max position for this reservation's waitlist
-      const { data: existing } = await supabase
-        .from('waitlists')
-        .select('position')
-        .eq('reservation_id', reservationId)
-        .order('position', { ascending: false })
-        .limit(1)
+  const handleContinue = () => {
+    if (!startSlot || !endSlot || durationMinutes <= 0) return
 
-      const nextPosition = existing && existing.length > 0 ? existing[0].position + 1 : 1
+    const endTime = `${String(Math.floor(endSlot.minutes / 60)).padStart(2, '0')}:${String(endSlot.minutes % 60).padStart(2, '0')}`
 
-      const { error } = await supabase.from('waitlists').insert({
-        reservation_id: reservationId,
-        user_id: user?.id,
-        position: nextPosition,
-      })
+    setTimeRange(startSlot.time, endTime, durationMinutes)
+    setPriceBreakdown(pricing)
+    router.push('/booking/confirm')
+  }
 
-      if (error) throw error
-
-      Alert.alert('Waitlisted', "You've been added to the waitlist for this slot.")
-      fetchReservationsForDate()
-    } catch (err) {
-      console.error('Error joining waitlist:', err)
-      Alert.alert('Error', 'Could not join waitlist. Please try again.')
-    }
+  const formatDisplayDate = () => {
+    return dateObj.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    })
   }
 
   if (loading) {
@@ -274,248 +237,263 @@ export default function BookCourtScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backButton}>← Back</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
+          <Ionicons name="arrow-back" size={22} color="#2563eb" />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{court?.name || 'Book Court'}</Text>
-        {court && (
-          <Text style={styles.subtitle}>
-            {court.sport.charAt(0).toUpperCase() + court.sport.slice(1)}
-          </Text>
-        )}
+        <Text style={styles.title}>{court?.name || 'Select Time'}</Text>
+        <Text style={styles.subtitle}>{formatDisplayDate()}</Text>
       </View>
 
-      {/* Date strip */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.dateStrip}
-      >
-        {dates.map((date, idx) => {
-          const isSelected = idx === selectedDateIdx
-          const isToday = idx === 0
-          return (
-            <TouchableOpacity
-              key={idx}
-              style={[styles.dateChip, isSelected && styles.dateChipActive]}
-              onPress={() => setSelectedDateIdx(idx)}
-            >
-              <Text style={[styles.dateDayName, isSelected && styles.dateTextActive]}>
-                {isToday ? 'Today' : DAY_NAMES[date.getDay()]}
-              </Text>
-              <Text style={[styles.dateNum, isSelected && styles.dateTextActive]}>
-                {date.getDate()}
-              </Text>
-              <Text style={[styles.dateMonth, isSelected && styles.dateTextActive]}>
-                {MONTH_NAMES[date.getMonth()]}
-              </Text>
-            </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+      {/* Instructions */}
+      <View style={styles.instructionBar}>
+        <Ionicons
+          name={!startSlot ? 'hand-left-outline' : 'resize-outline'}
+          size={16}
+          color="#64748b"
+        />
+        <Text style={styles.instructionText}>
+          {!startSlot
+            ? 'Tap a slot to set your start time'
+            : !endSlot
+              ? 'Now tap a slot to set your end time'
+              : 'Tap a slot to start over'}
+        </Text>
+      </View>
 
       {/* Time slots */}
       <ScrollView
-        style={styles.slotsContainer}
+        style={styles.slotsScroll}
         contentContainerStyle={styles.slotsContent}
         showsVerticalScrollIndicator={false}
       >
-        {slots.length === 0 ? (
-          <View style={styles.emptySlots}>
-            <Text style={styles.emptySlotsTitle}>No availability</Text>
-            <Text style={styles.emptySlotsSubtitle}>
+        {displaySlots.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color="#cbd5e1" />
+            <Text style={styles.emptyTitle}>No availability</Text>
+            <Text style={styles.emptySubtitle}>
               This court has no time slots for the selected day
             </Text>
           </View>
         ) : (
-          <View style={styles.slotsGrid}>
-            {slots.map((slot, idx) => {
-              const slotInfo = getSlotStatus(slot)
-              const { status } = slotInfo
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.slot,
-                    status === 'available' && styles.slotAvailable,
-                    status === 'booked' && styles.slotBooked,
-                    status === 'waitlisted' && styles.slotWaitlisted,
-                    status === 'past' && styles.slotPast,
-                  ]}
-                  onPress={() => handleSlotPress(slot, slotInfo)}
-                  disabled={status === 'past' || status === 'waitlisted'}
-                >
-                  <Text
-                    style={[
-                      styles.slotTime,
-                      status === 'available' && styles.slotTimeAvailable,
-                      status === 'booked' && styles.slotTimeBooked,
-                      status === 'waitlisted' && styles.slotTimeWaitlisted,
-                      status === 'past' && styles.slotTimePast,
-                    ]}
-                  >
-                    {formatSlotTime(slot.startTime)}
+          displaySlots.map((slot) => {
+            const booked = isSlotBooked(slot)
+            const past = isSlotPast(slot)
+            const inRange = isSlotInRange(slot)
+            const isStart = isSlotStart(slot)
+            const disabled = booked || past
+
+            let slotStyle = styles.slotDefault
+            let timeStyle = styles.slotTimeDefault
+            let labelText = formatTime12(slot.time)
+            let sublabel = ''
+
+            if (past) {
+              slotStyle = styles.slotPast
+              timeStyle = styles.slotTimePast
+              sublabel = 'Past'
+            } else if (booked) {
+              slotStyle = styles.slotBooked
+              timeStyle = styles.slotTimeBooked
+              sublabel = 'Booked'
+            } else if (isStart && !endSlot) {
+              slotStyle = styles.slotStart
+              timeStyle = styles.slotTimeSelected
+              sublabel = 'Start'
+            } else if (inRange) {
+              slotStyle = styles.slotInRange
+              timeStyle = styles.slotTimeSelected
+            } else if (isStart) {
+              slotStyle = styles.slotStart
+              timeStyle = styles.slotTimeSelected
+              sublabel = 'Start'
+            }
+
+            return (
+              <TouchableOpacity
+                key={slot.minutes}
+                style={[styles.slotRow, slotStyle]}
+                onPress={() => handleSlotPress(slot)}
+                disabled={disabled}
+                activeOpacity={0.6}
+              >
+                <Text style={[styles.slotTime, timeStyle]}>{labelText}</Text>
+                {sublabel ? (
+                  <Text style={[styles.slotSublabel, booked && styles.slotSublabelBooked]}>
+                    {sublabel}
                   </Text>
-                  <Text
-                    style={[
-                      styles.slotLabel,
-                      status === 'available' && styles.slotLabelAvailable,
-                      status === 'booked' && styles.slotLabelBooked,
-                      status === 'waitlisted' && styles.slotLabelWaitlisted,
-                      status === 'past' && styles.slotLabelPast,
-                    ]}
-                  >
-                    {status === 'available' && 'Available'}
-                    {status === 'booked' && 'Join Waitlist'}
-                    {status === 'waitlisted' && 'On Waitlist'}
-                    {status === 'past' && 'Past'}
-                  </Text>
-                </TouchableOpacity>
-              )
-            })}
-          </View>
+                ) : null}
+                {inRange && !isStart && (
+                  <View style={styles.selectedDot} />
+                )}
+              </TouchableOpacity>
+            )
+          })
         )}
       </ScrollView>
+
+      {/* Bottom bar with pricing and continue */}
+      {startSlot && endSlot && durationMinutes > 0 && (
+        <View style={styles.bottomBar}>
+          <View style={styles.bottomInfo}>
+            <Text style={styles.bottomTimeRange}>
+              {formatTime12(startSlot.time)} – {formatTime12(
+                `${String(Math.floor(endSlot.minutes / 60)).padStart(2, '0')}:${String(endSlot.minutes % 60).padStart(2, '0')}`
+              )}
+            </Text>
+            <Text style={styles.bottomDuration}>
+              {durationMinutes >= 60
+                ? `${Math.floor(durationMinutes / 60)}h${durationMinutes % 60 > 0 ? ` ${durationMinutes % 60}m` : ''}`
+                : `${durationMinutes}m`}
+            </Text>
+          </View>
+          <View style={styles.bottomPriceRow}>
+            {pricing.is_free ? (
+              <Text style={styles.bottomPriceFree}>Free</Text>
+            ) : (
+              <Text style={styles.bottomPrice}>${pricing.final_price.toFixed(2)}</Text>
+            )}
+            {pricing.discount_amount > 0 && !pricing.is_free && (
+              <Text style={styles.bottomDiscount}>
+                {Math.round((pricing.discount_amount / pricing.base_price) * 100)}% off
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+            <Text style={styles.continueText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingTop: 60,
-  },
+  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 60 },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
   },
-  header: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  backButton: {
-    fontSize: 16,
-    color: '#2563eb',
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  dateStrip: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 8,
-  },
-  dateChip: {
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minWidth: 62,
-  },
-  dateChipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  dateDayName: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginBottom: 2,
-  },
-  dateNum: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 2,
-  },
-  dateMonth: {
-    fontSize: 11,
-    color: '#94a3b8',
-  },
-  dateTextActive: {
-    color: '#ffffff',
-  },
-  slotsContainer: {
-    flex: 1,
-  },
-  slotsContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
-  slotsGrid: {
+  header: { paddingHorizontal: 20, marginBottom: 12 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
+  backText: { fontSize: 16, color: '#2563eb', fontWeight: '600' },
+  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
+  subtitle: { fontSize: 15, color: '#64748b', marginTop: 4 },
+
+  instructionBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  slot: {
-    width: '47%',
-    borderRadius: 12,
-    padding: 14,
     alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 20,
+    marginBottom: 16,
+    backgroundColor: '#eff6ff',
+    padding: 12,
+    borderRadius: 10,
+  },
+  instructionText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+
+  slotsScroll: { flex: 1 },
+  slotsContent: { paddingHorizontal: 20, paddingBottom: 20 },
+
+  slotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    marginBottom: 6,
     borderWidth: 1,
+    borderColor: 'transparent',
   },
-  slotAvailable: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#bbf7d0',
-  },
-  slotBooked: {
-    backgroundColor: '#fff7ed',
-    borderColor: '#fed7aa',
-  },
-  slotWaitlisted: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fde68a',
+  slotDefault: {
+    backgroundColor: '#ffffff',
+    borderColor: '#f1f5f9',
   },
   slotPast: {
     backgroundColor: '#f8fafc',
     borderColor: '#e2e8f0',
+    opacity: 0.5,
   },
-  slotTime: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 2,
+  slotBooked: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
   },
-  slotTimeAvailable: { color: '#166534' },
-  slotTimeBooked: { color: '#9a3412' },
-  slotTimeWaitlisted: { color: '#92400e' },
+  slotStart: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  slotInRange: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#93c5fd',
+  },
+
+  slotTime: { fontSize: 16, fontWeight: '600', flex: 1 },
+  slotTimeDefault: { color: '#1e293b' },
   slotTimePast: { color: '#cbd5e1' },
-  slotLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+  slotTimeBooked: { color: '#dc2626' },
+  slotTimeSelected: { color: '#ffffff' },
+
+  slotSublabel: { fontSize: 12, fontWeight: '600', color: '#94a3b8' },
+  slotSublabelBooked: { color: '#dc2626' },
+
+  selectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#2563eb',
   },
-  slotLabelAvailable: { color: '#22c55e' },
-  slotLabelBooked: { color: '#f97316' },
-  slotLabelWaitlisted: { color: '#eab308' },
-  slotLabelPast: { color: '#cbd5e1' },
-  emptySlots: {
+
+  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 8 },
+  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  emptySubtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
+
+  // Bottom bar
+  bottomBar: {
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 34,
+  },
+  bottomInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 60,
-  },
-  emptySlotsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
     marginBottom: 4,
   },
-  emptySlotsSubtitle: {
-    fontSize: 14,
-    color: '#94a3b8',
-    textAlign: 'center',
+  bottomTimeRange: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  bottomDuration: { fontSize: 13, color: '#64748b' },
+  bottomPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
   },
+  bottomPrice: { fontSize: 22, fontWeight: '700', color: '#2563eb' },
+  bottomPriceFree: { fontSize: 22, fontWeight: '700', color: '#15803d' },
+  bottomDiscount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2563eb',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  continueButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 14,
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  continueText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
 })

@@ -15,13 +15,16 @@ import {
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { supabase } from '../../lib/supabase'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
+import { useMembershipStore } from '../../store/membershipStore'
 
 export default function ProfileScreen() {
   const router = useRouter()
   const { user, clearAuth } = useAuthStore()
   const { selectedClub, clearClub } = useClubStore()
+  const { tier, membership, loading: tierLoading, clearMembership } = useMembershipStore()
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -138,6 +141,7 @@ export default function ProfileScreen() {
       await supabase.auth.signOut()
       clearAuth()
       clearClub()
+      clearMembership()
     } catch {
       // handled by auth listener
     }
@@ -184,6 +188,50 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* Membership Card */}
+        {selectedClub && (
+          <View style={styles.membershipSection}>
+            {tierLoading ? (
+              <View style={styles.membershipCard}>
+                <View style={[styles.skeletonBar, { width: '50%', height: 14 }]} />
+                <View style={[styles.skeletonBar, { width: '70%', height: 12, marginTop: 8 }]} />
+              </View>
+            ) : tier ? (
+              <View style={[styles.membershipCard, { borderLeftColor: tier.color || '#2563eb' }]}>
+                <View style={styles.membershipHeader}>
+                  <View style={[styles.tierDot, { backgroundColor: tier.color || '#2563eb' }]} />
+                  <Text style={styles.tierName}>{tier.name}</Text>
+                </View>
+                {tier.can_book_free ? (
+                  <View style={styles.freeBadge}>
+                    <Ionicons name="checkmark-circle" size={14} color="#15803d" />
+                    <Text style={styles.freeBadgeText}>Books free — no charge for court bookings</Text>
+                  </View>
+                ) : tier.discount_percent > 0 ? (
+                  <View style={styles.discountBadge}>
+                    <Ionicons name="pricetag" size={14} color="#2563eb" />
+                    <Text style={styles.discountBadgeText}>
+                      {tier.discount_percent}% off court bookings
+                    </Text>
+                  </View>
+                ) : (
+                  <Text style={styles.tierSubtext}>Standard pricing</Text>
+                )}
+              </View>
+            ) : membership ? (
+              <View style={styles.membershipCard}>
+                <Text style={styles.tierName}>{membership.tier}</Text>
+                <Text style={styles.tierSubtext}>No pricing tier configured</Text>
+              </View>
+            ) : (
+              <View style={styles.membershipCardMuted}>
+                <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
+                <Text style={styles.noTierText}>No membership tier — contact your club</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Profile Fields */}
         <View style={styles.fields}>
@@ -279,6 +327,88 @@ const styles = StyleSheet.create({
   editAvatarText: { color: '#ffffff', fontSize: 10, fontWeight: '700' },
   clubBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   clubBadgeText: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
+
+  // Membership card
+  membershipSection: { paddingHorizontal: 24, paddingTop: 16 },
+  membershipCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2563eb',
+  },
+  membershipCardMuted: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  membershipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  tierDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  tierName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    textTransform: 'capitalize',
+  },
+  tierSubtext: {
+    fontSize: 13,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  freeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  freeBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#15803d',
+  },
+  discountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  discountBadgeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  noTierText: {
+    fontSize: 14,
+    color: '#94a3b8',
+    flex: 1,
+  },
+  skeletonBar: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+  },
+
   fields: { paddingHorizontal: 24, paddingTop: 16 },
   fieldGroup: { marginBottom: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 },

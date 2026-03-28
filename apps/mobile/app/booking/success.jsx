@@ -1,36 +1,91 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useEffect, useRef } from 'react'
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+} from 'react-native'
 import { useRouter } from 'expo-router'
+import Ionicons from '@expo/vector-icons/Ionicons'
 
 export default function BookingSuccessScreen() {
   const router = useRouter()
+  const scaleAnim = useRef(new Animated.Value(0)).current
+  const opacityAnim = useRef(new Animated.Value(0)).current
+  const checkScale = useRef(new Animated.Value(0)).current
+  const buttonsOpacity = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    // Sequence: circle scales up → check pops → text fades → buttons fade
+    Animated.sequence([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+      Animated.spring(checkScale, {
+        toValue: 1,
+        tension: 100,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonsOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start()
+  }, [])
 
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <View style={styles.checkCircle}>
-          <Text style={styles.checkMark}>✓</Text>
-        </View>
-        <Text style={styles.title}>Booking Confirmed!</Text>
-        <Text style={styles.subtitle}>
-          Your court has been reserved. You'll receive a confirmation notification shortly.
-        </Text>
+        {/* Animated checkmark circle */}
+        <Animated.View
+          style={[
+            styles.checkCircle,
+            { transform: [{ scale: scaleAnim }] },
+          ]}
+        >
+          <Animated.View style={{ transform: [{ scale: checkScale }] }}>
+            <Ionicons name="checkmark" size={48} color="#15803d" />
+          </Animated.View>
+        </Animated.View>
+
+        {/* Text */}
+        <Animated.View style={[styles.textBlock, { opacity: opacityAnim }]}>
+          <Text style={styles.title}>Booking Confirmed!</Text>
+          <Text style={styles.subtitle}>
+            Your court has been reserved. You'll receive a confirmation notification shortly.
+          </Text>
+        </Animated.View>
       </View>
 
-      <View style={styles.footer}>
+      {/* Buttons */}
+      <Animated.View style={[styles.footer, { opacity: buttonsOpacity }]}>
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => router.replace('/(tabs)/reservations')}
         >
-          <Text style={styles.primaryButtonText}>Back to Home</Text>
+          <Ionicons name="calendar" size={18} color="#ffffff" />
+          <Text style={styles.primaryButtonText}>View My Reservations</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => router.replace('/(tabs)/reservations')}
+          onPress={() => router.replace('/(tabs)')}
         >
-          <Text style={styles.secondaryButtonText}>View Reservations</Text>
+          <Ionicons name="tennisball-outline" size={18} color="#2563eb" />
+          <Text style={styles.secondaryButtonText}>Book Another Court</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </View>
   )
 }
@@ -49,24 +104,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
   },
-  checkMark: {
-    fontSize: 36,
-    color: '#16a34a',
-    fontWeight: '700',
-  },
+  textBlock: { alignItems: 'center' },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1e293b',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 15,
@@ -82,7 +133,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb',
     borderRadius: 14,
     padding: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   primaryButtonText: {
     color: '#ffffff',
@@ -94,7 +148,10 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 14,
     padding: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   secondaryButtonText: {
     color: '#2563eb',
