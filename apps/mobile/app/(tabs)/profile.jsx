@@ -20,12 +20,30 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
+import { useStreakStore } from '../../store/streakStore'
+import { useKudosStore } from '../../store/kudosStore'
+import { StreakBadge, StreakMilestones, StreakFreezeButton } from '../../components/streaks'
+import { KudosBadge, KudosReceivedList } from '../../components/kudos'
 
 export default function ProfileScreen() {
   const router = useRouter()
   const { user, clearAuth } = useAuthStore()
   const { selectedClub, clearClub } = useClubStore()
   const { tier, membership, loading: tierLoading, clearMembership, fetchMembershipTier } = useMembershipStore()
+  const {
+    streak,
+    milestones,
+    isLoading: streakLoading,
+    fetchStreak,
+    fetchMilestones,
+    useFreeze,
+  } = useStreakStore()
+  const {
+    receivedKudos,
+    totalReceived,
+    isLoading: kudosLoading,
+    fetchReceivedKudos,
+  } = useKudosStore()
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -40,13 +58,21 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     fetchProfile()
-  }, [user?.id])
+    if (user?.id && selectedClub?.id) {
+      fetchStreak(user.id, selectedClub.id)
+      fetchMilestones(user.id, selectedClub.id)
+      fetchReceivedKudos(user.id, selectedClub.id)
+    }
+  }, [user?.id, selectedClub?.id])
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
     await Promise.all([
       fetchProfile(),
       fetchMembershipTier(user?.id, selectedClub?.id),
+      user?.id && selectedClub?.id ? fetchStreak(user.id, selectedClub.id) : Promise.resolve(),
+      user?.id && selectedClub?.id ? fetchMilestones(user.id, selectedClub.id) : Promise.resolve(),
+      user?.id && selectedClub?.id ? fetchReceivedKudos(user.id, selectedClub.id) : Promise.resolve(),
     ])
     setRefreshing(false)
   }, [user?.id, selectedClub?.id])
@@ -203,6 +229,12 @@ export default function ProfileScreen() {
               <Text style={styles.clubBadgeText}>{selectedClub.name}</Text>
             </View>
           )}
+
+          {selectedClub && !streakLoading && (
+            <View style={styles.streakBadgeRow}>
+              <StreakBadge streak={streak?.current_streak ?? 0} size="medium" />
+            </View>
+          )}
         </View>
 
         {/* Membership Card */}
@@ -246,6 +278,33 @@ export default function ProfileScreen() {
                 <Text style={styles.noTierText}>No membership tier — contact your club</Text>
               </View>
             )}
+          </View>
+        )}
+
+        {/* Play Streak */}
+        {selectedClub && !streakLoading && (
+          <View style={styles.streakSection}>
+            <Text style={styles.streakSectionTitle}>Play Streak</Text>
+            <StreakMilestones
+              achievedMilestones={milestones.map((m) => m.milestone)}
+              currentStreak={streak?.current_streak ?? 0}
+            />
+            <StreakFreezeButton
+              freezesRemaining={streak?.freezes_remaining ?? 0}
+              currentStreak={streak?.current_streak ?? 0}
+              onFreeze={() => useFreeze(user?.id, selectedClub?.id)}
+            />
+          </View>
+        )}
+
+        {/* Kudos */}
+        {selectedClub && (
+          <View style={styles.kudosSection}>
+            <View style={styles.kudosSectionHeader}>
+              <Text style={styles.kudosSectionTitle}>Kudos</Text>
+              <KudosBadge count={totalReceived} />
+            </View>
+            <KudosReceivedList kudos={receivedKudos} isLoading={kudosLoading} />
           </View>
         )}
 
@@ -425,6 +484,34 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
 
+  streakBadgeRow: {
+    marginTop: 8,
+  },
+  streakSection: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  streakSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 14,
+  },
+  kudosSection: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+  kudosSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  kudosSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
   fields: { paddingHorizontal: 24, paddingTop: 16 },
   fieldGroup: { marginBottom: 20 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 },

@@ -84,6 +84,15 @@ export function getNotificationRoute(type, data) {
       return '/(tabs)/reservations'
     case 'event_reminder':
       return '/(tabs)/clubs' // Events are club-specific
+    case 'streak_milestone':
+    case 'kudos':
+      return '/(tabs)/profile'
+    case 'spot_request':
+    case 'spot_accepted':
+    case 'spot_declined':
+      return '/players'
+    case 'no_show':
+      return '/(tabs)/reservations'
     case 'announcement':
       return '/(tabs)/notifications'
     default:

@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 
 export const useBookingStore = create((set) => ({
-  selectedSport: null,
   selectedCourt: null,
   selectedDate: null,
   startTime: null,
@@ -14,7 +13,6 @@ export const useBookingStore = create((set) => ({
   // Guests
   guests: [],
 
-  setSport: (sport) => set({ selectedSport: sport }),
   setSelectedCourt: (court) => set({ selectedCourt: court }),
   setSelectedDate: (date) => set({ selectedDate: date }),
   setTimeRange: (startTime, endTime, durationMinutes) =>
@@ -26,7 +24,6 @@ export const useBookingStore = create((set) => ({
 
   clearBooking: () =>
     set({
-      selectedSport: null,
       selectedCourt: null,
       selectedDate: null,
       startTime: null,

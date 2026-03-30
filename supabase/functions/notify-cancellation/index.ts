@@ -53,11 +53,13 @@ serve(async (req) => {
     const clubName = club?.name ?? "";
 
     const courtName = reservation.court?.name ?? "Court";
-    const title = clubName ? `${clubName} - Reservation Cancelled` : "Reservation Cancelled";
+    const title = "Reservation Cancelled";
+    const pushTitle = clubName ? `${clubName}: ${title}` : title;
     const body = `${courtName} on ${dateStr} at ${timeStr} has been cancelled`;
 
     await supabase.from("notifications").insert({
       user_id: reservation.user_id,
+      club_id: reservation.club_id,
       title,
       body,
       type: "cancellation",
@@ -67,7 +69,7 @@ serve(async (req) => {
     if (user?.push_token) {
       await sendExpoPush({
         to: user.push_token,
-        title,
+        title: pushTitle,
         body,
         data: {
           type: "cancellation",

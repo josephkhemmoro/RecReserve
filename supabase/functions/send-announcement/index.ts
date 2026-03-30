@@ -65,6 +65,15 @@ serve(async (req) => {
 
     const clubId = profile.club_id as string;
 
+    // Get club name for push notifications
+    const { data: clubData } = await supabase
+      .from("clubs")
+      .select("name")
+      .eq("id", clubId)
+      .single();
+    const clubName = clubData?.name || "";
+    const pushTitle = clubName ? `${clubName}: ${title}` : title;
+
     // Build query to get target members
     let query = supabase
       .from("users")
@@ -103,10 +112,26 @@ serve(async (req) => {
     let pushSent = 0;
     let pushFailed = 0;
 
+    // Store master announcement record
+    const { error: annError } = await supabase
+      .from("club_announcements")
+      .insert({
+        club_id: clubId,
+        title,
+        body: message,
+        audience: audience === "tier" && tier_id ? tier_id : "all",
+        created_by: user.id,
+      });
+
+    if (annError) {
+      console.error("Error inserting club announcement:", annError);
+    }
+
     // In-app notifications — batch insert
     if (send_in_app && recipients.length > 0) {
       const rows = recipients.map((u: { id: string }) => ({
         user_id: u.id,
+        club_id: clubId,
         title,
         body: message,
         type: "announcement",
@@ -135,7 +160,7 @@ serve(async (req) => {
           batch.map((token: string) =>
             sendExpoPush({
               to: token,
-              title,
+              title: pushTitle,
               body: message,
               data: { type: "announcement" },
             })

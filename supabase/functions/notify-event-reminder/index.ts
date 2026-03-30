@@ -43,7 +43,8 @@ serve(async (_req) => {
           .single();
         const clubName = club?.name ?? "";
 
-        const title = clubName ? `${clubName} - ${event.title} is tomorrow` : `Reminder: ${event.title} is tomorrow`;
+        const title = `${event.title} is tomorrow`;
+        const pushTitle = clubName ? `${clubName}: ${title}` : title;
         const startDate = new Date(event.start_time);
         const timeStr = startDate.toLocaleTimeString("en-US", {
           hour: "numeric",
@@ -64,6 +65,7 @@ serve(async (_req) => {
 
         await supabase.from("notifications").insert({
           user_id: reg.user_id,
+          club_id: event.club_id,
           title,
           body,
           type: "event_reminder",
@@ -73,7 +75,7 @@ serve(async (_req) => {
         if (user?.push_token) {
           await sendExpoPush({
             to: user.push_token,
-            title,
+            title: pushTitle,
             body,
             data: {
               type: "event_reminder",

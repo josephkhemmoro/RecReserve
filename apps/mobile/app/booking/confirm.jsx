@@ -20,6 +20,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useBookingStore } from '../../store/bookingStore'
 import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
+import { useStreakStore } from '../../store/streakStore'
 
 const REPEAT_OPTIONS = [2, 4, 8, 12]
 
@@ -37,7 +38,6 @@ export default function BookingConfirmScreen() {
   const {
     selectedCourt,
     selectedDate,
-    selectedSport,
     startTime,
     endTime,
     durationMinutes,
@@ -186,6 +186,11 @@ export default function BookingConfirmScreen() {
         )
       }
 
+      // Fire-and-forget streak update — don't block booking flow
+      if (user?.id && selectedClub?.id) {
+        useStreakStore.getState().triggerStreakUpdate(user.id, selectedClub.id).catch(() => {})
+      }
+
       clearBooking()
       router.replace('/booking/success')
     } catch (err) {
@@ -213,10 +218,6 @@ export default function BookingConfirmScreen() {
         {/* Court & Time Card */}
         <View style={styles.card}>
           <Text style={styles.courtName}>{selectedCourt.name}</Text>
-          <Text style={styles.courtSport}>
-            {(selectedSport || selectedCourt.sport || '').charAt(0).toUpperCase() +
-              (selectedSport || selectedCourt.sport || '').slice(1)}
-          </Text>
 
           <View style={styles.divider} />
 
@@ -415,7 +416,6 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   courtName: { fontSize: 20, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  courtSport: { fontSize: 14, color: '#64748b', textTransform: 'capitalize' },
   divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
   detailRow: { marginBottom: 10 },
   detailItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },

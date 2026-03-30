@@ -11,7 +11,12 @@ import { useRouter, useLocalSearchParams } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { supabase } from '../../../lib/supabase'
 import { useBookingStore } from '../../../store/bookingStore'
+import { useClubStore } from '../../../store/clubStore'
 import { usePricing } from '../../../lib/usePricing'
+import { useSlotDemand } from '../../../lib/useSlotDemand'
+import { DEMAND_BG_COLORS } from '../../../lib/demandHelpers'
+import { SlotDemandIndicator } from '../../../components/booking/SlotDemandIndicator'
+import { DemandLegend } from '../../../components/booking/DemandLegend'
 
 const SLOT_INCREMENT = 30 // 30-minute increments
 
@@ -57,6 +62,7 @@ export default function BookCourtScreen() {
     setTimeRange,
     setPriceBreakdown,
   } = useBookingStore()
+  const { selectedClub } = useClubStore()
 
   const [court, setCourt] = useState(selectedCourt)
   const [availability, setAvailability] = useState([])
@@ -68,6 +74,7 @@ export default function BookCourtScreen() {
   const durationMinutes = startSlot && endSlot ? endSlot.minutes - startSlot.minutes : 0
   const hourlyRate = court?.hourly_rate ?? 0
   const pricing = usePricing(hourlyRate, durationMinutes)
+  const { demandMap, isLoading: demandLoading } = useSlotDemand(selectedClub?.id, date)
 
   const dateObj = useMemo(() => new Date(date + 'T00:00:00'), [date])
   const dayOfWeek = dateObj.getDay()
@@ -158,9 +165,9 @@ export default function BookCourtScreen() {
 
   const isSlotPast = (slot) => {
     const now = new Date()
-    const today = now.toISOString().split('T')[0]
-    if (date > today) return false
-    if (date < today) return true
+    const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    if (date > todayLocal) return false
+    if (date < todayLocal) return true
     const nowMins = now.getHours() * 60 + now.getMinutes()
     return slot.minutes < nowMins
   }
@@ -263,6 +270,20 @@ export default function BookCourtScreen() {
         </Text>
       </View>
 
+      {/* Demand legend */}
+      {!demandLoading && Object.keys(demandMap).length > 0 && <DemandLegend />}
+
+      {/* Scarcity nudge for prime-time */}
+      {!demandLoading && displaySlots.some((s) => {
+        const mins = s.minutes
+        const demand = demandMap[s.time]
+        return mins >= 17 * 60 && mins < 20 * 60 && demand?.demandLevel === 'almost_full'
+      }) && (
+        <View style={styles.nudgeBanner}>
+          <Text style={styles.nudgeText}>Popular day! Prime-time slots are filling fast.</Text>
+        </View>
+      )}
+
       {/* Time slots */}
       <ScrollView
         style={styles.slotsScroll}
@@ -289,6 +310,8 @@ export default function BookCourtScreen() {
             let timeStyle = styles.slotTimeDefault
             let labelText = formatTime12(slot.time)
             let sublabel = ''
+            const demand = demandMap[slot.time]
+            const isAvailable = !past && !booked && !isStart && !inRange
 
             if (past) {
               slotStyle = styles.slotPast
@@ -311,10 +334,15 @@ export default function BookCourtScreen() {
               sublabel = 'Start'
             }
 
+            // Apply demand background tint to available slots only
+            const demandBg = isAvailable && demand
+              ? { backgroundColor: DEMAND_BG_COLORS[demand.demandLevel] || '#ffffff' }
+              : null
+
             return (
               <TouchableOpacity
                 key={slot.minutes}
-                style={[styles.slotRow, slotStyle]}
+                style={[styles.slotRow, slotStyle, demandBg]}
                 onPress={() => handleSlotPress(slot)}
                 disabled={disabled}
                 activeOpacity={0.6}
@@ -325,6 +353,9 @@ export default function BookCourtScreen() {
                     {sublabel}
                   </Text>
                 ) : null}
+                {isAvailable && demand && (
+                  <SlotDemandIndicator demandLevel={demand.demandLevel} compact />
+                )}
                 {inRange && !isStart && (
                   <View style={styles.selectedDot} />
                 )}
@@ -397,6 +428,21 @@ const styles = StyleSheet.create({
   },
   instructionText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
 
+  nudgeBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    backgroundColor: '#fff7ed',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  nudgeText: {
+    fontSize: 13,
+    color: '#c2410c',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
   slotsScroll: { flex: 1 },
   slotsContent: { paddingHorizontal: 20, paddingBottom: 20 },
 

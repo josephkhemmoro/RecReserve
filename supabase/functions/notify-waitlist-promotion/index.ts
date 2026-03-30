@@ -46,11 +46,13 @@ serve(async (req) => {
     const clubName = club?.name ?? "";
 
     const courtName = reservation?.court?.name ?? "Court";
-    const title = clubName ? `${clubName} - A slot opened up!` : "A slot opened up!";
+    const title = "A slot opened up!";
+    const pushTitle = clubName ? `${clubName}: ${title}` : title;
     const body = `${courtName} on ${dateStr} at ${timeStr} is now yours`;
 
     await supabase.from("notifications").insert({
       user_id,
+      club_id: reservation?.club_id,
       title,
       body,
       type: "waitlist_promotion",
@@ -60,7 +62,7 @@ serve(async (req) => {
     if (user?.push_token) {
       await sendExpoPush({
         to: user.push_token,
-        title,
+        title: pushTitle,
         body,
         data: {
           type: "waitlist_promotion",

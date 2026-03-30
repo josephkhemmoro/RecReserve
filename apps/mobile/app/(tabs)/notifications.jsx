@@ -4,6 +4,7 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
+  Image,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
@@ -12,6 +13,7 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { getNotificationRoute } from '../../lib/notifications'
+import { getCleanTitle } from '../../lib/notificationHelpers'
 import { useAuthStore } from '../../store/authStore'
 import { useNotificationStore } from '../../store/notificationStore'
 
@@ -45,7 +47,7 @@ export default function NotificationsScreen() {
     try {
       const { data, error } = await supabase
         .from('notifications')
-        .select('*')
+        .select('*, club:clubs(name, logo_url)')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -76,8 +78,22 @@ export default function NotificationsScreen() {
           table: 'notifications',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          addNotification(payload.new)
+        async (payload) => {
+          const notif = payload.new
+          // Fetch club info for the new notification
+          if (notif.club_id) {
+            try {
+              const { data: club } = await supabase
+                .from('clubs')
+                .select('name, logo_url')
+                .eq('id', notif.club_id)
+                .single()
+              notif.club = club
+            } catch {
+              // Non-blocking — club will just be null
+            }
+          }
+          addNotification(notif)
         }
       )
       .subscribe()
@@ -127,33 +143,75 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter((n) => !n.read).length
 
+  const getTypeIcon = (type) => {
+    switch (type) {
+      case 'announcement': return { name: 'megaphone-outline', color: '#7c3aed', bg: '#ede9fe' }
+      case 'streak_milestone': return { name: 'flame-outline', color: '#ea580c', bg: '#fed7aa' }
+      case 'kudos': return { name: 'hand-right-outline', color: '#FF8A65', bg: '#ffccbc' }
+      case 'spot_request':
+      case 'spot_accepted':
+      case 'spot_declined': return { name: 'people-outline', color: '#2563eb', bg: '#dbeafe' }
+      case 'no_show': return { name: 'warning-outline', color: '#d97706', bg: '#fde68a' }
+      case 'booking_confirmation': return { name: 'checkmark-circle-outline', color: '#16a34a', bg: '#bbf7d0' }
+      case 'cancellation': return { name: 'close-circle-outline', color: '#dc2626', bg: '#fecaca' }
+      case 'booking_reminder': return { name: 'time-outline', color: '#2563eb', bg: '#dbeafe' }
+      default: return { name: 'notifications-outline', color: '#64748b', bg: '#f1f5f9' }
+    }
+  }
+
+  const getClubInitial = (name) => {
+    if (!name) return '?'
+    return name.charAt(0).toUpperCase()
+  }
+
   const renderNotification = ({ item }) => {
-    const isAnnouncement = item.type === 'announcement'
+    const icon = getTypeIcon(item.type)
+    const clubName = item.club?.name || null
+    const clubLogo = item.club?.logo_url || null
+    const cleanTitle = getCleanTitle(item.title, clubName)
+
     return (
       <TouchableOpacity
         style={[
           styles.notificationCard,
           !item.read && styles.notificationUnread,
-          isAnnouncement && styles.announcementCard,
-          isAnnouncement && !item.read && styles.announcementUnread,
         ]}
         onPress={() => handleTap(item)}
       >
-        {isAnnouncement ? (
-          <View style={styles.announcementIcon}>
-            <Ionicons name="megaphone-outline" size={16} color="#7c3aed" />
+        <View style={styles.cardTopRow}>
+          <View style={[styles.typeIcon, { backgroundColor: icon.bg }]}>
+            <Ionicons name={icon.name} size={16} color={icon.color} />
           </View>
-        ) : (
-          !item.read && <View style={styles.unreadDot} />
+          <View style={styles.notificationContent}>
+            <Text style={styles.notificationTitle}>{cleanTitle}</Text>
+            <Text style={styles.notificationBody} numberOfLines={2}>
+              {item.body}
+            </Text>
+          </View>
+        </View>
+        {item.image_url && (
+          <Image
+            source={{ uri: item.image_url }}
+            style={styles.notificationImage}
+            resizeMode="cover"
+          />
         )}
-        <View style={styles.notificationContent}>
-          {isAnnouncement && (
-            <Text style={styles.announcementLabel}>ANNOUNCEMENT</Text>
+        {/* Club attribution line */}
+        <View style={styles.attributionRow}>
+          {clubName ? (
+            <View style={styles.clubAttribution}>
+              {clubLogo ? (
+                <Image source={{ uri: clubLogo }} style={styles.clubMiniLogo} />
+              ) : (
+                <View style={styles.clubMiniLogoFallback}>
+                  <Text style={styles.clubMiniInitial}>{getClubInitial(clubName)}</Text>
+                </View>
+              )}
+              <Text style={styles.clubMiniName} numberOfLines={1}>{clubName}</Text>
+            </View>
+          ) : (
+            <View />
           )}
-          <Text style={styles.notificationTitle}>{item.title}</Text>
-          <Text style={styles.notificationBody} numberOfLines={2}>
-            {item.body}
-          </Text>
           <Text style={styles.notificationTime}>{timeAgo(item.created_at)}</Text>
         </View>
       </TouchableOpacity>
@@ -235,11 +293,9 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   notificationCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#f1f5f9',
@@ -248,37 +304,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     borderColor: '#dbeafe',
   },
-  announcementCard: {
-    backgroundColor: '#faf5ff',
-    borderColor: '#ede9fe',
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
-  announcementUnread: {
-    backgroundColor: '#f3e8ff',
-    borderColor: '#ddd6fe',
-  },
-  announcementIcon: {
+  typeIcon: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#ede9fe',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
-    marginRight: 10,
-  },
-  announcementLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#7c3aed',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#2563eb',
-    marginTop: 6,
     marginRight: 10,
   },
   notificationContent: {
@@ -288,13 +324,59 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   notificationBody: {
     fontSize: 14,
     color: '#64748b',
     lineHeight: 20,
-    marginBottom: 6,
+  },
+  notificationImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 10,
+    marginTop: 10,
+    backgroundColor: '#f1f5f9',
+  },
+  attributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  clubAttribution: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  clubMiniLogo: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+  },
+  clubMiniLogoFallback: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clubMiniInitial: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  clubMiniName: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500',
+    flex: 1,
   },
   notificationTime: {
     fontSize: 12,

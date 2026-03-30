@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import type { Sport, DayOfWeek } from "@recreserve/shared";
+import type { DayOfWeek } from "@recreserve/shared";
 
 const STEPS = ["Club Details", "First Court", "Booking Rules", "Done"];
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -11,12 +11,10 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 interface ClubForm {
   name: string;
   location: string;
-  sport: Sport;
 }
 
 interface CourtForm {
   name: string;
-  sport: Sport;
 }
 
 interface AvailabilityForm {
@@ -38,8 +36,8 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [club, setClub] = useState<ClubForm>({ name: "", location: "", sport: "both" });
-  const [court, setCourt] = useState<CourtForm>({ name: "", sport: "tennis" });
+  const [club, setClub] = useState<ClubForm>({ name: "", location: "" });
+  const [court, setCourt] = useState<CourtForm>({ name: "" });
   const [availability, setAvailability] = useState<AvailabilityForm[]>(
     Array.from({ length: 7 }, () => ({ enabled: true, open: "08:00", close: "21:00" }))
   );
@@ -104,7 +102,6 @@ export default function OnboardingPage() {
         .insert({
           club_id: newClub.id,
           name: court.name.trim(),
-          sport: court.sport,
           is_active: true,
         })
         .select("id")
@@ -269,18 +266,6 @@ export default function OnboardingPage() {
                 className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Court 1"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Sport</label>
-              <select
-                value={court.sport}
-                onChange={(e) => setCourt({ ...court, sport: e.target.value as Sport })}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="tennis">Tennis</option>
-                <option value="pickleball">Pickleball</option>
-                <option value="both">Both</option>
-              </select>
             </div>
           </div>
 

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { ClubPhotoManager } from "@/components/settings/ClubPhotoManager";
 
 interface ClubData {
   id: string;
@@ -518,6 +519,9 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* Club Photos */}
+        {admin?.clubId && <ClubPhotoManager clubId={admin.clubId} />}
 
         {/* Danger Zone */}
         <div className="bg-white rounded-xl border-2 border-red-200 p-6">

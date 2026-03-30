@@ -44,12 +44,14 @@ serve(async (_req) => {
       const clubName = club?.name ?? "";
 
       const courtName = reservation.court?.name ?? "Court";
-      const title = clubName ? `${clubName} - Court in 1 hour` : "Your court is in 1 hour";
+      const title = "Your court is in 1 hour";
+      const pushTitle = clubName ? `${clubName}: ${title}` : title;
       const body = `${courtName} at ${timeStr}`;
 
       // Write notification
       await supabase.from("notifications").insert({
         user_id: reservation.user_id,
+        club_id: reservation.club_id,
         title,
         body,
         type: "booking_reminder",
@@ -60,7 +62,7 @@ serve(async (_req) => {
       if (user?.push_token) {
         await sendExpoPush({
           to: user.push_token,
-          title,
+          title: pushTitle,
           body,
           data: {
             type: "booking_reminder",

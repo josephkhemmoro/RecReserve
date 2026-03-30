@@ -32,27 +32,8 @@ export const useClubStore = create((set, get) => ({
 
       if (error) throw error
 
-      // Also fetch the primary sport from courts
-      const { data: courts } = await supabase
-        .from('courts')
-        .select('sport')
-        .eq('club_id', clubId)
-        .eq('is_active', true)
-
-      const sports = new Set((courts || []).map((c) => c.sport))
-      let sport = 'both'
-      if (sports.size === 1) {
-        sport = [...sports][0]
-      } else if (sports.has('tennis') && sports.has('pickleball')) {
-        sport = 'both'
-      } else if (sports.has('tennis')) {
-        sport = 'tennis'
-      } else if (sports.has('pickleball')) {
-        sport = 'pickleball'
-      }
-
       set({
-        clubDetail: { ...data, sport },
+        clubDetail: data,
         clubDetailLoading: false,
       })
     } catch (err) {

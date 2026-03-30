@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 
@@ -11,10 +11,12 @@ interface Tier {
 }
 
 interface HistoryItem {
+  id: string;
   title: string;
   body: string;
   sent_at: string;
-  recipient_count: number;
+  audience: string;
+  image_url: string | null;
 }
 
 type Audience = "all" | "tier";
@@ -37,6 +39,8 @@ const EMPTY_FORM: ComposeForm = {
   send_in_app: true,
 };
 
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+
 export default function AnnouncementsPage() {
   const { admin, loading: adminLoading } = useAdminClub();
 
@@ -52,6 +56,12 @@ export default function AnnouncementsPage() {
 
   // Tier list
   const [tiers, setTiers] = useState<Tier[]>([]);
+
+  // Image attachment
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   // History
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -83,55 +93,23 @@ export default function AnnouncementsPage() {
     try {
       const supabase = createClient();
 
-      // Get all announcement notifications for users in this club.
-      // We need club members first, then their announcement notifications.
-      const { data: members } = await supabase
-        .from("users")
-        .select("id")
-        .eq("club_id", clubId);
-
-      const memberIds = (members ?? []).map((m: { id: string }) => m.id);
-
-      if (memberIds.length === 0) {
-        setHistory([]);
-        setHistoryLoading(false);
-        return;
-      }
-
-      const { data: notifications, error } = await supabase
-        .from("notifications")
-        .select("title, body, created_at")
-        .eq("type", "announcement")
-        .in("user_id", memberIds)
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("club_announcements")
+        .select("id, title, body, audience, image_url, created_at")
+        .eq("club_id", clubId)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
       if (error) throw error;
 
-      // Group by title + created_at minute to deduplicate batch inserts
-      const groups = new Map<string, { title: string; body: string; sent_at: string; count: number }>();
-
-      for (const n of notifications ?? []) {
-        const title = n.title as string;
-        const body = n.body as string;
-        const created = n.created_at as string;
-        // Round to the nearest minute to group batch inserts together
-        const minuteKey = created.slice(0, 16);
-        const key = `${title}::${minuteKey}`;
-
-        const existing = groups.get(key);
-        if (existing) {
-          existing.count++;
-        } else {
-          groups.set(key, { title, body, sent_at: created, count: 1 });
-        }
-      }
-
       setHistory(
-        Array.from(groups.values()).map((g) => ({
-          title: g.title,
-          body: g.body,
-          sent_at: g.sent_at,
-          recipient_count: g.count,
+        (data ?? []).map((a: { id: string; title: string; body: string; audience: string; image_url: string | null; created_at: string }) => ({
+          id: a.id,
+          title: a.title,
+          body: a.body,
+          sent_at: a.created_at,
+          audience: a.audience,
+          image_url: a.image_url,
         }))
       );
     } catch (err) {
@@ -163,8 +141,9 @@ export default function AnnouncementsPage() {
     try {
       const supabase = createClient();
       const clubId = admin.clubId;
-      const clubName = admin.clubName;
-      const title = clubName ? `${clubName} - ${form.title.trim()}` : form.title.trim();
+      const clubName = admin.clubName || "";
+      const title = form.title.trim();
+      const pushTitle = clubName ? `${clubName}: ${title}` : title;
       const message = form.message.trim();
 
       // Get target users
@@ -200,13 +179,54 @@ export default function AnnouncementsPage() {
 
       const recipients = users ?? [];
 
+      // Upload image if attached
+      let imageUrl: string | null = null;
+      if (imageFile) {
+        setImageUploading(true);
+        const ext = imageFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const filePath = `${clubId}/announcements/${Date.now()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("club-assets")
+          .upload(filePath, imageFile, { upsert: false });
+
+        if (uploadError) {
+          console.error("Image upload error:", uploadError);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from("club-assets")
+            .getPublicUrl(filePath);
+          imageUrl = urlData.publicUrl;
+        }
+        setImageUploading(false);
+      }
+
+      // Store master announcement record for club profile page
+      const { data: sessionData } = await supabase.auth.getSession();
+      const { error: annError } = await supabase
+        .from("club_announcements")
+        .insert({
+          club_id: clubId,
+          title,
+          body: message,
+          audience: form.audience === "tier" && form.tier_id ? form.tier_id : "all",
+          image_url: imageUrl,
+          created_by: sessionData?.session?.user?.id ?? null,
+        });
+
+      if (annError) {
+        console.error("Error inserting club announcement:", annError);
+      }
+
       // Insert in-app notifications
       if (form.send_in_app && recipients.length > 0) {
         const rows = recipients.map((u: { id: string }) => ({
           user_id: u.id,
+          club_id: clubId,
           title,
           body: message,
           type: "announcement",
+          image_url: imageUrl,
           read: false,
         }));
 
@@ -232,7 +252,7 @@ export default function AnnouncementsPage() {
           const batch = tokens.slice(i, i + 100);
           const pushMessages = batch.map((token: string) => ({
             to: token,
-            title,
+            title: pushTitle,
             body: message,
             data: { type: "announcement" },
             sound: "default",
@@ -264,12 +284,50 @@ export default function AnnouncementsPage() {
         push_failed: pushFailed,
       });
       setForm(EMPTY_FORM);
+      setImageFile(null);
+      setImagePreview(null);
+      if (imageInputRef.current) imageInputRef.current.value = "";
       fetchHistory(admin.clubId);
     } catch (err) {
       console.error("Error sending announcement:", err);
       setSendError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setSending(false);
+    }
+  };
+
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [confirmDeleteKey, setConfirmDeleteKey] = useState<string | null>(null);
+
+  const handleDeleteAnnouncement = async (item: HistoryItem) => {
+    if (!admin?.clubId) return;
+    setDeletingKey(item.id);
+    try {
+      const supabase = createClient();
+
+      // Delete the master announcement record
+      const { error } = await supabase
+        .from("club_announcements")
+        .delete()
+        .eq("id", item.id);
+
+      if (error) throw error;
+
+      // Also delete the per-user notifications for this announcement
+      await supabase
+        .from("notifications")
+        .delete()
+        .eq("club_id", admin.clubId)
+        .eq("type", "announcement")
+        .eq("title", item.title)
+        .eq("body", item.body);
+
+      setConfirmDeleteKey(null);
+      fetchHistory(admin.clubId);
+    } catch (err) {
+      console.error("Error deleting announcement:", err);
+    } finally {
+      setDeletingKey(null);
     }
   };
 
@@ -363,6 +421,59 @@ export default function AnnouncementsPage() {
               >
                 {form.message.length}/500
               </p>
+            </div>
+
+            {/* Image Attachment */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Image
+                <span className="text-xs font-normal text-slate-400 ml-1">
+                  (optional — flyer, promo graphic, etc.)
+                </span>
+              </label>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > MAX_IMAGE_SIZE) {
+                    setSendError("Image must be under 5MB");
+                    return;
+                  }
+                  setSendError("");
+                  setImageFile(file);
+                  setImagePreview(URL.createObjectURL(file));
+                }}
+              />
+              {imagePreview ? (
+                <div className="relative inline-block">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="h-32 rounded-lg object-cover border border-slate-200"
+                  />
+                  <button
+                    onClick={() => {
+                      setImageFile(null);
+                      setImagePreview(null);
+                      if (imageInputRef.current) imageInputRef.current.value = "";
+                    }}
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center hover:bg-red-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="px-4 py-2.5 rounded-lg border-2 border-dashed border-slate-300 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                >
+                  📎 Attach Image
+                </button>
+              )}
             </div>
 
             {/* Audience */}
@@ -534,9 +645,16 @@ export default function AnnouncementsPage() {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {history.map((item, idx) => (
-                <div key={idx} className="px-6 py-4">
+              {history.map((item) => (
+                <div key={item.id} className="px-6 py-4">
                   <div className="flex items-start justify-between gap-4">
+                    {item.image_url && (
+                      <img
+                        src={item.image_url}
+                        alt=""
+                        className="w-14 h-14 rounded-lg object-cover shrink-0 mr-3"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
                       <h3 className="text-sm font-semibold text-slate-900 truncate">
                         {item.title}
@@ -545,14 +663,37 @@ export default function AnnouncementsPage() {
                         {item.body}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
                       <p className="text-xs text-slate-400">
                         {formatTimestamp(item.sent_at)}
                       </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {item.recipient_count} recipient
-                        {item.recipient_count !== 1 ? "s" : ""}
+                      <p className="text-xs text-slate-500 capitalize">
+                        {item.audience === "all" ? "All members" : "Specific tier"}
                       </p>
+                      {confirmDeleteKey === item.id ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <button
+                            onClick={() => handleDeleteAnnouncement(item)}
+                            disabled={deletingKey === item.id}
+                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                          >
+                            {deletingKey === item.id ? "Deleting..." : "Confirm"}
+                          </button>
+                          <button
+                            onClick={() => setConfirmDeleteKey(null)}
+                            className="text-xs font-medium text-slate-400 hover:text-slate-600"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteKey(item.id)}
+                          className="text-xs font-medium text-red-500 hover:text-red-700 mt-1"
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

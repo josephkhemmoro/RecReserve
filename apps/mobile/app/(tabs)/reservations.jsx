@@ -12,6 +12,10 @@ import {
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
+import { useKudosStore } from '../../store/kudosStore'
+import { useOpenSpotsStore } from '../../store/openSpotsStore'
+import { KudosPrompt } from '../../components/kudos'
+import { CreateOpenSpotModal } from '../../components/openSpots'
 
 const TABS = ['Upcoming', 'Past']
 
@@ -24,6 +28,11 @@ export default function ReservationsScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [cancellingId, setCancellingId] = useState(null)
   const [bookingRules, setBookingRules] = useState(null)
+  const [dismissedKudos, setDismissedKudos] = useState(new Set())
+  const { sentKudosReservationIds, fetchSentKudosIds } = useKudosStore()
+  const { mySpots, fetchMySpots } = useOpenSpotsStore()
+  const [spotModalReservation, setSpotModalReservation] = useState(null)
+  const postedReservationIds = new Set(mySpots.filter((s) => s.is_active).map((s) => s.reservation_id))
 
   const fetchData = useCallback(async () => {
     try {
@@ -31,7 +40,7 @@ export default function ReservationsScreen() {
 
       let query = supabase
         .from('reservations')
-        .select('*, court:courts(name, sport)')
+        .select('*, court:courts(name)')
         .eq('user_id', user?.id)
         .eq('club_id', selectedClub?.id)
 
@@ -71,6 +80,8 @@ export default function ReservationsScreen() {
   useEffect(() => {
     setLoading(true)
     fetchData()
+    if (user?.id) fetchSentKudosIds(user.id)
+    if (user?.id && selectedClub?.id) fetchMySpots(user.id, selectedClub.id)
   }, [fetchData])
 
   const onRefresh = () => {
@@ -171,6 +182,7 @@ export default function ReservationsScreen() {
 
   const getStatusStyle = (reservation) => {
     if (reservation.status === 'cancelled') return { bg: '#fef2f2', text: '#dc2626', label: 'Cancelled' }
+    if (reservation.status === 'no_show') return { bg: '#fffbeb', text: '#d97706', label: 'No-Show' }
     if (reservation.status === 'completed') return { bg: '#f0fdf4', text: '#16a34a', label: 'Completed' }
     if (new Date(reservation.start_time) < new Date()) return { bg: '#f1f5f9', text: '#64748b', label: 'Past' }
     return { bg: '#eff6ff', text: '#2563eb', label: 'Confirmed' }
@@ -186,14 +198,35 @@ export default function ReservationsScreen() {
     return { remaining: seriesItems.length, total }
   }
 
+  const shouldShowKudosPrompt = (item) => {
+    if (activeTab !== 'Past') return false
+    const endTime = new Date(item.end_time)
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+    if (endTime >= now || endTime < sevenDaysAgo) return false
+    if (item.status === 'cancelled') return false
+    if (sentKudosReservationIds.includes(item.id)) return false
+    if (dismissedKudos.has(item.id)) return false
+    return true
+  }
+
   const renderReservation = ({ item }) => {
     const statusInfo = getStatusStyle(item)
     const cancelable = activeTab === 'Upcoming' && canCancel(item)
     const withinCutoff = activeTab === 'Upcoming' && !canCancel(item)
     const seriesInfo = getSeriesInfo(item)
     const guestList = item.guests || []
+    const showKudos = shouldShowKudosPrompt(item)
 
     return (
+      <View>
+        {showKudos && (
+          <KudosPrompt
+            reservationId={item.id}
+            clubId={item.club_id}
+            onDismiss={() => setDismissedKudos((prev) => new Set([...prev, item.id]))}
+          />
+        )}
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.cardInfo}>
@@ -225,25 +258,43 @@ export default function ReservationsScreen() {
 
         {activeTab === 'Upcoming' && (
           <View style={styles.cardFooter}>
-            {cancelable ? (
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => handleCancel(item)}
-                disabled={cancellingId === item.id}
-              >
-                {cancellingId === item.id ? (
-                  <ActivityIndicator size="small" color="#dc2626" />
-                ) : (
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                )}
-              </TouchableOpacity>
-            ) : withinCutoff ? (
-              <Text style={styles.cutoffText}>
-                Within {bookingRules?.cancellation_cutoff_hours}h cancellation window
-              </Text>
-            ) : null}
+            <View style={styles.cardFooterRow}>
+              {cancelable ? (
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => handleCancel(item)}
+                  disabled={cancellingId === item.id}
+                >
+                  {cancellingId === item.id ? (
+                    <ActivityIndicator size="small" color="#dc2626" />
+                  ) : (
+                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                  )}
+                </TouchableOpacity>
+              ) : withinCutoff ? (
+                <Text style={styles.cutoffText}>
+                  Within {bookingRules?.cancellation_cutoff_hours}h cancellation window
+                </Text>
+              ) : null}
+
+              {postedReservationIds.has(item.id) ? (
+                <Text style={styles.spotPostedText}>Open spot posted ✓</Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setSpotModalReservation({
+                    id: item.id,
+                    court_name: item.court?.name || 'Court',
+                    start_time: item.start_time,
+                    end_time: item.end_time,
+                  })}
+                >
+                  <Text style={styles.findPlayersLink}>🤝 Find players</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
+      </View>
       </View>
     )
   }
@@ -295,6 +346,20 @@ export default function ReservationsScreen() {
           )
         }
       />
+
+      {spotModalReservation && (
+        <CreateOpenSpotModal
+          visible={!!spotModalReservation}
+          reservation={spotModalReservation}
+          userId={user?.id}
+          clubId={selectedClub?.id}
+          onClose={() => setSpotModalReservation(null)}
+          onCreated={() => {
+            setSpotModalReservation(null)
+            if (user?.id && selectedClub?.id) fetchMySpots(user.id, selectedClub.id)
+          }}
+        />
+      )}
     </View>
   )
 }
@@ -321,7 +386,10 @@ const styles = StyleSheet.create({
   guestText: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 12, fontWeight: '700' },
-  cardFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', alignItems: 'flex-start' },
+  cardFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  cardFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  findPlayersLink: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
+  spotPostedText: { fontSize: 13, fontWeight: '600', color: '#16a34a' },
   cancelButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fef2f2' },
   cancelButtonText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
   cutoffText: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },

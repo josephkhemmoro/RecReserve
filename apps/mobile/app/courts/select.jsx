@@ -120,7 +120,7 @@ export default function CourtSelectScreen() {
     try {
       const { data, error } = await supabase
         .from('courts')
-        .select('id, name, sport, hourly_rate, is_active')
+        .select('id, name, hourly_rate, is_active')
         .eq('club_id', selectedClub.id)
         .eq('is_active', true)
         .order('name')

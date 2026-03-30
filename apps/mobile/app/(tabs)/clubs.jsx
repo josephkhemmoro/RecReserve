@@ -13,11 +13,13 @@ import {
   Platform,
   RefreshControl,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 
 export default function ClubsScreen() {
+  const router = useRouter()
   const { user } = useAuthStore()
   const { memberships, selectedClub, setMemberships, setSelectedClub } = useClubStore()
   const [search, setSearch] = useState('')
@@ -182,12 +184,15 @@ export default function ClubsScreen() {
                           </Text>
                         </View>
                       )}
-                      <View style={styles.clubInfo}>
+                      <TouchableOpacity
+                        style={styles.clubInfo}
+                        onPress={() => router.push(`/club/${m.club_id}`)}
+                      >
                         <Text style={styles.clubName}>{m.club?.name || 'Club'}</Text>
                         {m.club?.location && (
                           <Text style={styles.clubLocation}>{m.club.location}</Text>
                         )}
-                      </View>
+                      </TouchableOpacity>
                       {selectedClub?.id === m.club_id ? (
                         <View style={styles.activeBadge}>
                           <Text style={styles.activeBadgeText}>Active</Text>
@@ -269,12 +274,15 @@ export default function ClubsScreen() {
                   </Text>
                 </View>
               )}
-              <View style={styles.clubInfo}>
+              <TouchableOpacity
+                style={styles.clubInfo}
+                onPress={() => router.push(`/club/${item.id}`)}
+              >
                 <Text style={styles.clubName}>{item.name}</Text>
                 {item.location && (
                   <Text style={styles.clubLocation}>{item.location}</Text>
                 )}
-              </View>
+              </TouchableOpacity>
               {alreadyMember ? (
                 <View style={styles.memberBadge}>
                   <Text style={styles.memberBadgeText}>Member</Text>

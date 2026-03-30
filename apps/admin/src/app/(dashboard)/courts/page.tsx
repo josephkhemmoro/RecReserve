@@ -3,12 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
-import type { Sport, DayOfWeek } from "@recreserve/shared";
+import type { DayOfWeek } from "@recreserve/shared";
 
 interface Court {
   id: string;
   name: string;
-  sport: Sport;
   is_active: boolean;
   hourly_rate: number;
   is_free: boolean;
@@ -16,7 +15,6 @@ interface Court {
 
 interface CourtForm {
   name: string;
-  sport: Sport;
   hourly_rate: number;
   is_free: boolean;
 }
@@ -39,7 +37,7 @@ const DAY_LABELS: { short: string; full: string }[] = [
   { short: "Sat", full: "Saturday" },
 ];
 
-const EMPTY_FORM: CourtForm = { name: "", sport: "tennis", hourly_rate: 0, is_free: false };
+const EMPTY_FORM: CourtForm = { name: "", hourly_rate: 0, is_free: false };
 
 export default function CourtsPage() {
   const { admin, loading: adminLoading } = useAdminClub();
@@ -56,7 +54,7 @@ export default function CourtsPage() {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("courts")
-        .select("id, name, sport, is_active, hourly_rate, is_free")
+        .select("id, name, is_active, hourly_rate, is_free")
         .eq("club_id", clubId)
         .order("name");
       if (error) throw error;
@@ -85,7 +83,6 @@ export default function CourtsPage() {
       const { error } = await supabase.from("courts").insert({
         club_id: admin.clubId,
         name: addForm.name.trim(),
-        sport: addForm.sport,
         hourly_rate: addForm.is_free ? 0 : addForm.hourly_rate,
         is_free: addForm.is_free,
         is_active: true,
@@ -144,18 +141,6 @@ export default function CourtsPage() {
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Court 1"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Sport</label>
-              <select
-                value={addForm.sport}
-                onChange={(e) => setAddForm({ ...addForm, sport: e.target.value as Sport })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="tennis">Tennis</option>
-                <option value="pickleball">Pickleball</option>
-                <option value="both">Both</option>
-              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Rate ($)</label>
@@ -242,7 +227,6 @@ function CourtCard({
 }) {
   const [form, setForm] = useState<CourtForm>({
     name: court.name,
-    sport: court.sport,
     hourly_rate: court.hourly_rate,
     is_free: court.is_free,
   });
@@ -258,7 +242,6 @@ function CourtCard({
     if (isEditing) {
       setForm({
         name: court.name,
-        sport: court.sport,
         hourly_rate: court.hourly_rate,
         is_free: court.is_free,
       });
@@ -300,7 +283,6 @@ function CourtCard({
         .from("courts")
         .update({
           name: form.name.trim(),
-          sport: form.sport,
           hourly_rate: form.is_free ? 0 : form.hourly_rate,
           is_free: form.is_free,
         })
@@ -361,8 +343,6 @@ function CourtCard({
             </span>
           </div>
           <div className="flex items-center gap-3 mt-1">
-            <span className="text-xs text-slate-500 capitalize">{court.sport}</span>
-            <span className="text-xs text-slate-300">·</span>
             {court.is_free ? (
               <span className="text-xs font-medium text-green-600">Free</span>
             ) : (
@@ -403,18 +383,6 @@ function CourtCard({
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Sport</label>
-                <select
-                  value={form.sport}
-                  onChange={(e) => setForm({ ...form, sport: e.target.value as Sport })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="tennis">Tennis</option>
-                  <option value="pickleball">Pickleball</option>
-                  <option value="both">Both</option>
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Rate ($)</label>
