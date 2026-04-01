@@ -19,6 +19,13 @@ import { useClubStore } from '../../store/clubStore'
 import { Avatar } from '../../components/ui'
 import { colors, spacing, borderRadius, shadows } from '../../theme'
 
+function formatDateOnly(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function ClubsScreen() {
   const router = useRouter()
   const { user } = useAuthStore()
@@ -30,30 +37,35 @@ export default function ClubsScreen() {
   const [hasSearched, setHasSearched] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Refresh memberships on mount
-  useEffect(() => {
-    refreshMemberships()
-  }, [])
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await refreshMemberships()
-    setRefreshing(false)
-  }, [])
-
-  const refreshMemberships = async () => {
+  const refreshMemberships = useCallback(async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('memberships')
         .select('id, club_id, tier, is_active, club:clubs(id, name, location, logo_url)')
         .eq('user_id', user?.id)
         .eq('is_active', true)
 
-      setMemberships(data || [])
+      if (error) throw error
+
+      const nextMemberships = data || []
+      setMemberships(nextMemberships)
+      return nextMemberships
     } catch (err) {
       console.error('Error refreshing memberships:', err)
+      return []
     }
-  }
+  }, [user?.id, setMemberships])
+
+  // Refresh memberships on mount
+  useEffect(() => {
+    refreshMemberships()
+  }, [refreshMemberships])
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true)
+    await refreshMemberships()
+    setRefreshing(false)
+  }, [refreshMemberships])
 
   const handleSearch = async () => {
     if (!search.trim()) return
@@ -83,27 +95,39 @@ export default function ClubsScreen() {
   const handleJoin = async (club) => {
     setJoining(club.id)
     try {
+      const joinDate = formatDateOnly()
       const { error } = await supabase.from('memberships').insert({
         user_id: user?.id,
         club_id: club.id,
         tier: 'standard',
-        start_date: new Date().toLocaleDateString('en-CA'),
+        start_date: joinDate,
         is_active: true,
       })
 
       if (error) throw error
 
-      await refreshMemberships()
+      const { error: profileError } = await supabase
+        .from('users')
+        .update({ club_id: club.id })
+        .eq('id', user?.id)
+        .is('club_id', null)
+
+      if (profileError) {
+        console.warn('Error syncing primary club after join:', profileError)
+      }
+
+      const nextMemberships = await refreshMemberships()
 
       // Auto-select if it's the user's first club
       if (!selectedClub) {
-        setSelectedClub(club)
+        const joinedMembership = nextMemberships.find((m) => m.club_id === club.id)
+        setSelectedClub(joinedMembership?.club || club)
       }
 
       Alert.alert('Joined!', `You are now a member of ${club.name}`)
     } catch (err) {
       console.error('Error joining club:', err)
-      Alert.alert('Error', 'Could not join club. Please try again.')
+      Alert.alert('Error', err?.message || 'Could not join club. Please try again.')
     } finally {
       setJoining(null)
     }
@@ -126,17 +150,29 @@ export default function ClubsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await supabase
+              const { error } = await supabase
                 .from('memberships')
                 .update({ is_active: false })
                 .eq('id', membership.id)
 
+              if (error) throw error
+
+              const nextMemberships = await refreshMemberships()
+
               // If leaving the selected club, clear selection
               if (selectedClub?.id === membership.club_id) {
-                setSelectedClub(null)
+                setSelectedClub(nextMemberships[0]?.club || null)
               }
 
-              refreshMemberships()
+              const { error: profileError } = await supabase
+                .from('users')
+                .update({ club_id: nextMemberships[0]?.club_id || null })
+                .eq('id', user?.id)
+                .eq('club_id', membership.club_id)
+
+              if (profileError) {
+                console.warn('Error syncing primary club after leave:', profileError)
+              }
             } catch (err) {
               console.error('Error leaving club:', err)
             }

@@ -49,43 +49,74 @@ export default function MembersPage() {
   const fetchMembers = useCallback(async (clubId: string) => {
     try {
       const supabase = createClient();
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, full_name, email, role, created_at")
-        .eq("club_id", clubId)
-        .order("full_name");
+      const memberMap = new Map<string, Member>();
 
-      if (error) throw error;
-
-      const userIds = (data ?? []).map((u: { id: string }) => u.id);
-
-      const { data: memberships } = await supabase
+      const { data: memberships, error: membershipsError } = await supabase
         .from("memberships")
-        .select("id, user_id, tier_id, is_active, membership_tier:membership_tiers(name, color)")
-        .eq("club_id", clubId)
-        .in("user_id", userIds.length > 0 ? userIds : ["__none__"]);
+        .select(`
+          id,
+          user_id,
+          tier_id,
+          is_active,
+          membership_tier:membership_tiers(name, color),
+          user:users!memberships_user_id_fkey(id, full_name, email, role, created_at)
+        `)
+        .eq("club_id", clubId);
 
-      const membershipMap = new Map<string, Member["membership"]>();
+      if (membershipsError) throw membershipsError;
+
       for (const m of memberships ?? []) {
+        const user = m.user as {
+          id: string;
+          full_name: string;
+          email: string;
+          role: string;
+          created_at: string;
+        } | null;
+        if (!user) continue;
+
         const tier = m.membership_tier as { name: string; color: string | null } | null;
-        membershipMap.set(m.user_id as string, {
+        memberMap.set(user.id, {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          created_at: user.created_at,
+          membership: {
           id: m.id as string,
           tier_id: m.tier_id as string | null,
           tier_name: tier?.name ?? null,
           tier_color: tier?.color ?? null,
           is_active: m.is_active as boolean,
+          },
+        });
+      }
+
+      const { data: legacyUsers, error: usersError } = await supabase
+        .from("users")
+        .select("id, full_name, email, role, created_at")
+        .eq("club_id", clubId)
+        .order("full_name");
+
+      if (usersError) throw usersError;
+
+      for (const u of legacyUsers ?? []) {
+        if (memberMap.has(u.id as string)) continue;
+
+        memberMap.set(u.id as string, {
+          id: u.id as string,
+          full_name: u.full_name as string,
+          email: u.email as string,
+          role: u.role as string,
+          created_at: u.created_at as string,
+          membership: null,
         });
       }
 
       setMembers(
-        (data ?? []).map((u: { id: string; full_name: string; email: string; role: string; created_at: string }) => ({
-          id: u.id,
-          full_name: u.full_name,
-          email: u.email,
-          role: u.role,
-          created_at: u.created_at,
-          membership: membershipMap.get(u.id) ?? null,
-        }))
+        Array.from(memberMap.values()).sort((a, b) =>
+          a.full_name.localeCompare(b.full_name)
+        )
       );
     } catch (err) {
       console.error("Error fetching members:", err);
@@ -100,6 +131,43 @@ export default function MembersPage() {
       fetchMembers(admin.clubId);
     }
   }, [admin?.clubId, fetchTiers, fetchMembers]);
+
+  useEffect(() => {
+    if (!admin?.clubId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`members-page-${admin.clubId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "memberships",
+          filter: `club_id=eq.${admin.clubId}`,
+        },
+        () => {
+          fetchMembers(admin.clubId);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "users",
+          filter: `club_id=eq.${admin.clubId}`,
+        },
+        () => {
+          fetchMembers(admin.clubId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [admin?.clubId, fetchMembers]);
 
   const handleMembershipChange = async (member: Member, tierId: string) => {
     if (!admin?.clubId) return;

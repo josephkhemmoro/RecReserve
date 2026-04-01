@@ -38,14 +38,22 @@ export default function ReservationsScreen() {
   const postedReservationIds = new Set(mySpots.filter((s) => s.is_active).map((s) => s.reservation_id))
 
   const fetchData = useCallback(async () => {
+    if (!user?.id || !selectedClub?.id) {
+      setReservations([])
+      setBookingRules(null)
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
+
     try {
       const now = toLocalISO(new Date())
 
       let query = supabase
         .from('reservations')
         .select('*, court:courts(name)')
-        .eq('user_id', user?.id)
-        .eq('club_id', selectedClub?.id)
+        .eq('user_id', user.id)
+        .eq('club_id', selectedClub.id)
 
       if (activeTab === 'Scheduled') {
         query = query
@@ -59,11 +67,9 @@ export default function ReservationsScreen() {
       }
 
       const requests = [query]
-      if (selectedClub?.id) {
-        requests.push(
-          supabase.from('booking_rules').select('*').eq('club_id', selectedClub.id).single()
-        )
-      }
+      requests.push(
+        supabase.from('booking_rules').select('*').eq('club_id', selectedClub.id).single()
+      )
 
       const results = await Promise.all(requests)
       const resResult = results[0]
@@ -85,7 +91,7 @@ export default function ReservationsScreen() {
     fetchData()
     if (user?.id) fetchSentKudosIds(user.id)
     if (user?.id && selectedClub?.id) fetchMySpots(user.id, selectedClub.id)
-  }, [fetchData])
+  }, [fetchData, fetchMySpots, fetchSentKudosIds, selectedClub?.id, user?.id])
 
   const onRefresh = () => {
     setRefreshing(true)
@@ -176,7 +182,7 @@ export default function ReservationsScreen() {
       }
 
       fetchData()
-    } catch (err) {
+    } catch (_err) {
       Alert.alert('Error', 'Failed to cancel reservation. Please try again.')
     } finally {
       setCancellingId(null)
