@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { toLocalISO } from '../lib/dateUtils'
 
 const PAGE_SIZE = 20
 
@@ -23,7 +24,7 @@ export const useFeedStore = create((set, get) => ({
         .from('feed_events')
         .select('*, actor:users!feed_events_actor_id_fkey(id, full_name, avatar_url)')
         .eq('club_id', clubId)
-        .gte('created_at', thirtyDaysAgo.toISOString())
+        .gte('created_at', toLocalISO(thirtyDaysAgo))
         .order('created_at', { ascending: false })
         .limit(PAGE_SIZE)
 
@@ -59,7 +60,7 @@ export const useFeedStore = create((set, get) => ({
         .from('feed_events')
         .select('*, actor:users!feed_events_actor_id_fkey(id, full_name, avatar_url)')
         .eq('club_id', clubId)
-        .gte('created_at', thirtyDaysAgo.toISOString())
+        .gte('created_at', toLocalISO(thirtyDaysAgo))
         .lt('created_at', lastCreatedAt)
         .order('created_at', { ascending: false })
         .limit(PAGE_SIZE)

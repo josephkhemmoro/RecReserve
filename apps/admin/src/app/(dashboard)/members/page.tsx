@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { PageHeader, Card, Badge, Button, Modal, FormInput, EmptyState, SkeletonTableRow } from "@/components/ui";
 
 interface MembershipTier {
   id: string;
@@ -124,7 +125,7 @@ export default function MembersPage() {
           club_id: admin.clubId,
           tier_id: tierId,
           tier: "standard",
-          start_date: new Date().toISOString().split("T")[0],
+          start_date: new Date().toLocaleDateString("en-CA"),
           is_active: true,
         });
       }
@@ -189,26 +190,28 @@ export default function MembersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Members</h1>
-        <input
-          type="text"
-          placeholder="Search members..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
+      <PageHeader
+        title="Members"
+        action={
+          <input
+            type="text"
+            placeholder="Search members..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="px-4 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 w-64 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+          />
+        }
+      />
 
-      <div className="bg-white rounded-xl border border-slate-200">
+      <Card noPadding>
         {isLoading ? (
-          <div className="p-6 space-y-3 animate-pulse">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-10 bg-slate-100 rounded" />)}
+          <div className="py-3 space-y-1">
+            {[1, 2, 3, 4].map((i) => <SkeletonTableRow key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="p-10 text-center text-slate-500">
-            {search ? "No members match your search" : "No members found"}
-          </div>
+          <EmptyState
+            title={search ? "No members match your search" : "No members found"}
+          />
         ) : (
           <table className="w-full">
             <thead>
@@ -228,20 +231,18 @@ export default function MembersPage() {
                   <td className="px-6 py-3 text-sm font-medium text-slate-900">{m.full_name}</td>
                   <td className="px-6 py-3 text-sm text-slate-600">{m.email}</td>
                   <td className="px-6 py-3">
-                    <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold capitalize ${
-                      m.role === "admin" || m.role === "owner"
-                        ? "bg-purple-50 text-purple-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}>
-                      {m.role}
-                    </span>
+                    <Badge
+                      label={m.role}
+                      variant={m.role === "admin" || m.role === "owner" ? "brand" : "default"}
+                      className="capitalize"
+                    />
                   </td>
                   <td className="px-6 py-3">
                     {tiers.length > 0 ? (
                       <select
                         value={m.membership?.tier_id ?? ""}
                         onChange={(e) => handleMembershipChange(m, e.target.value)}
-                        className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900"
+                        className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
                       >
                         <option value="">None</option>
                         {tiers.map((t) => (
@@ -256,76 +257,72 @@ export default function MembersPage() {
                     {new Date(m.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-3">
-                    <span className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold ${
-                      m.membership?.is_active !== false ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                    }`}>
-                      {m.membership?.is_active !== false ? "Active" : "Suspended"}
-                    </span>
+                    <Badge
+                      label={m.membership?.is_active !== false ? "Active" : "Suspended"}
+                      variant={m.membership?.is_active !== false ? "success" : "error"}
+                    />
                   </td>
                   <td className="px-6 py-3 text-right space-x-2">
                     {m.membership && (
-                      <button
+                      <Button
+                        variant={m.membership.is_active ? "danger" : "ghost"}
+                        size="sm"
                         onClick={() => handleToggleSuspend(m)}
-                        className={`text-sm font-medium ${
-                          m.membership.is_active
-                            ? "text-red-600 hover:text-red-800"
-                            : "text-green-600 hover:text-green-800"
-                        }`}
+                        className={!m.membership.is_active ? "text-success hover:text-success" : ""}
                       >
                         {m.membership.is_active ? "Suspend" : "Unsuspend"}
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => { setCreditModal({ userId: m.id, name: m.full_name }); setCreditAmount(""); }}
-                      className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      className="text-brand hover:text-brand-dark"
                     >
                       Add Credit
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
 
       {/* Credit Modal */}
-      {creditModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-4">
-              Add Credit for {creditModal.name}
-            </h3>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Amount ($)</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={creditAmount}
-                onChange={(e) => setCreditAmount(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="25.00"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={handleAddCredit}
-                disabled={savingCredit || !creditAmount}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
-              >
-                {savingCredit ? "Adding..." : "Add Credit"}
-              </button>
-              <button
-                onClick={() => { setCreditModal(null); setCreditAmount(""); }}
-                className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!creditModal}
+        onClose={() => { setCreditModal(null); setCreditAmount(""); }}
+        title={`Add Credit for ${creditModal?.name ?? ""}`}
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => { setCreditModal(null); setCreditAmount(""); }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddCredit}
+              disabled={!creditAmount}
+              loading={savingCredit}
+            >
+              {savingCredit ? "Adding..." : "Add Credit"}
+            </Button>
+          </>
+        }
+      >
+        <FormInput
+          label="Amount ($)"
+          type="number"
+          min={0}
+          step={0.01}
+          value={creditAmount}
+          onChange={(val) => setCreditAmount(val)}
+          placeholder="25.00"
+        />
+      </Modal>
     </div>
   );
 }

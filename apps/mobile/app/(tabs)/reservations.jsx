@@ -10,19 +10,22 @@ import {
   RefreshControl,
 } from 'react-native'
 import { supabase } from '../../lib/supabase'
+import { toLocalISO } from '../../lib/dateUtils'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { useKudosStore } from '../../store/kudosStore'
 import { useOpenSpotsStore } from '../../store/openSpotsStore'
 import { KudosPrompt } from '../../components/kudos'
 import { CreateOpenSpotModal } from '../../components/openSpots'
+import { Icon } from '../../components/ui'
+import { colors, spacing, borderRadius, shadows } from '../../theme'
 
-const TABS = ['Upcoming', 'Past']
+const TABS = ['Scheduled', 'Past']
 
 export default function ReservationsScreen() {
   const { user } = useAuthStore()
   const { selectedClub } = useClubStore()
-  const [activeTab, setActiveTab] = useState('Upcoming')
+  const [activeTab, setActiveTab] = useState('Scheduled')
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -36,7 +39,7 @@ export default function ReservationsScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const now = new Date().toISOString()
+      const now = toLocalISO(new Date())
 
       let query = supabase
         .from('reservations')
@@ -44,7 +47,7 @@ export default function ReservationsScreen() {
         .eq('user_id', user?.id)
         .eq('club_id', selectedClub?.id)
 
-      if (activeTab === 'Upcoming') {
+      if (activeTab === 'Scheduled') {
         query = query
           .eq('status', 'confirmed')
           .gte('start_time', now)
@@ -145,7 +148,7 @@ export default function ReservationsScreen() {
           .update({ status: 'cancelled' })
           .eq('series_id', reservation.series_id)
           .eq('status', 'confirmed')
-          .gte('start_time', new Date().toISOString())
+          .gte('start_time', toLocalISO(new Date()))
 
         if (error) throw error
       } else {
@@ -156,6 +159,12 @@ export default function ReservationsScreen() {
 
         if (error) throw error
       }
+
+      // Clean up any open spot posted for this reservation
+      await supabase
+        .from('open_spots')
+        .delete()
+        .eq('reservation_id', reservation.id)
 
       if (reservation.stripe_payment_id) {
         await supabase.functions.invoke('process-refund', {
@@ -181,11 +190,11 @@ export default function ReservationsScreen() {
     new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 
   const getStatusStyle = (reservation) => {
-    if (reservation.status === 'cancelled') return { bg: '#fef2f2', text: '#dc2626', label: 'Cancelled' }
-    if (reservation.status === 'no_show') return { bg: '#fffbeb', text: '#d97706', label: 'No-Show' }
-    if (reservation.status === 'completed') return { bg: '#f0fdf4', text: '#16a34a', label: 'Completed' }
-    if (new Date(reservation.start_time) < new Date()) return { bg: '#f1f5f9', text: '#64748b', label: 'Past' }
-    return { bg: '#eff6ff', text: '#2563eb', label: 'Confirmed' }
+    if (reservation.status === 'cancelled') return { bg: colors.errorLight, text: colors.error, label: 'Cancelled' }
+    if (reservation.status === 'no_show') return { bg: colors.warningLight, text: colors.warning, label: 'No-Show' }
+    if (reservation.status === 'completed') return { bg: colors.successLight, text: colors.success, label: 'Completed' }
+    if (new Date(reservation.start_time) < new Date()) return { bg: colors.neutral100, text: colors.neutral500, label: 'Past' }
+    return { bg: colors.primarySurface, text: colors.primary, label: 'Confirmed' }
   }
 
   // Count remaining in series
@@ -212,8 +221,8 @@ export default function ReservationsScreen() {
 
   const renderReservation = ({ item }) => {
     const statusInfo = getStatusStyle(item)
-    const cancelable = activeTab === 'Upcoming' && canCancel(item)
-    const withinCutoff = activeTab === 'Upcoming' && !canCancel(item)
+    const cancelable = activeTab === 'Scheduled' && canCancel(item)
+    const withinCutoff = activeTab === 'Scheduled' && !canCancel(item)
     const seriesInfo = getSeriesInfo(item)
     const guestList = item.guests || []
     const showKudos = shouldShowKudosPrompt(item)
@@ -256,7 +265,7 @@ export default function ReservationsScreen() {
           </View>
         </View>
 
-        {activeTab === 'Upcoming' && (
+        {activeTab === 'Scheduled' && (
           <View style={styles.cardFooter}>
             <View style={styles.cardFooterRow}>
               {cancelable ? (
@@ -266,7 +275,7 @@ export default function ReservationsScreen() {
                   disabled={cancellingId === item.id}
                 >
                   {cancellingId === item.id ? (
-                    <ActivityIndicator size="small" color="#dc2626" />
+                    <ActivityIndicator size="small" color={colors.error} />
                   ) : (
                     <Text style={styles.cancelButtonText}>Cancel</Text>
                   )}
@@ -278,9 +287,13 @@ export default function ReservationsScreen() {
               ) : null}
 
               {postedReservationIds.has(item.id) ? (
-                <Text style={styles.spotPostedText}>Open spot posted ✓</Text>
+                <View style={styles.spotPostedRow}>
+                  <Icon name="checkmark-circle" size="sm" color={colors.success} />
+                  <Text style={styles.spotPostedText}>Open spot posted</Text>
+                </View>
               ) : (
                 <TouchableOpacity
+                  style={styles.findPlayersRow}
                   onPress={() => setSpotModalReservation({
                     id: item.id,
                     court_name: item.court?.name || 'Court',
@@ -288,7 +301,8 @@ export default function ReservationsScreen() {
                     end_time: item.end_time,
                   })}
                 >
-                  <Text style={styles.findPlayersLink}>🤝 Find players</Text>
+                  <Icon name="people-outline" size="sm" color={colors.primary} />
+                  <Text style={styles.findPlayersLink}>Find players</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -302,7 +316,7 @@ export default function ReservationsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>My Reservations</Text>
+        <Text style={styles.title}>My bookings</Text>
       </View>
 
       <View style={styles.tabRow}>
@@ -330,15 +344,15 @@ export default function ReservationsScreen() {
         ListEmptyComponent={
           loading ? (
             <View style={styles.centered}>
-              <ActivityIndicator size="large" color="#2563eb" />
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
           ) : (
             <View style={styles.emptyState}>
               <Text style={styles.emptyTitle}>
-                {activeTab === 'Upcoming' ? 'No upcoming reservations' : 'No past reservations'}
+                {activeTab === 'Scheduled' ? 'No upcoming reservations' : 'No past reservations'}
               </Text>
               <Text style={styles.emptySubtitle}>
-                {activeTab === 'Upcoming'
+                {activeTab === 'Scheduled'
                   ? 'Book a court to see your reservations here'
                   : 'Your completed and cancelled reservations will appear here'}
               </Text>
@@ -365,35 +379,37 @@ export default function ReservationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 70 },
+  container: { flex: 1, backgroundColor: colors.white, paddingTop: 70 },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: 20, marginBottom: 16 },
-  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
-  tabRow: { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 16, gap: 8 },
-  tab: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
-  tabActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  tabText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-  tabTextActive: { color: '#ffffff' },
-  list: { paddingHorizontal: 20, paddingBottom: 40 },
-  card: { backgroundColor: '#ffffff', borderRadius: 14, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f1f5f9' },
+  header: { paddingHorizontal: spacing.lg, marginBottom: spacing.base },
+  title: { fontSize: 22, fontWeight: '700', color: colors.neutral900 },
+  tabRow: { flexDirection: 'row', paddingHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.neutral150, marginBottom: spacing.base },
+  tab: { flex: 1, paddingVertical: spacing.md, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: colors.primary },
+  tabText: { fontSize: 14, fontWeight: '600', color: colors.neutral400 },
+  tabTextActive: { color: colors.neutral900 },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing['3xl'] },
+  card: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.base, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.neutral100, ...shadows.sm },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  cardInfo: { flex: 1, marginRight: 12 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
-  courtName: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  recurringBadge: { backgroundColor: '#faf5ff', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  cardInfo: { flex: 1, marginRight: spacing.md },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs, flexWrap: 'wrap' },
+  courtName: { fontSize: 16, fontWeight: '700', color: colors.neutral900 },
+  recurringBadge: { backgroundColor: '#faf5ff', paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: borderRadius.sm },
   recurringBadgeText: { fontSize: 11, fontWeight: '600', color: '#7c3aed' },
-  dateTime: { fontSize: 13, color: '#64748b' },
-  guestText: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  dateTime: { fontSize: 13, color: colors.neutral500 },
+  guestText: { fontSize: 12, color: colors.neutral400, marginTop: spacing.xs },
+  statusBadge: { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: borderRadius.sm },
   statusText: { fontSize: 12, fontWeight: '700' },
-  cardFooter: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  cardFooter: { marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.neutral100 },
   cardFooterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  findPlayersLink: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
-  spotPostedText: { fontSize: 13, fontWeight: '600', color: '#16a34a' },
-  cancelButton: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#fecaca', backgroundColor: '#fef2f2' },
-  cancelButtonText: { color: '#dc2626', fontSize: 13, fontWeight: '600' },
-  cutoffText: { fontSize: 12, color: '#94a3b8', fontStyle: 'italic' },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1e293b', marginBottom: 6 },
-  emptySubtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
+  findPlayersRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  findPlayersLink: { fontSize: 13, fontWeight: '600', color: colors.primary },
+  spotPostedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  spotPostedText: { fontSize: 13, fontWeight: '600', color: colors.success },
+  cancelButton: { paddingHorizontal: spacing.base, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.errorLight, backgroundColor: colors.errorLight },
+  cancelButtonText: { color: colors.error, fontSize: 13, fontWeight: '600' },
+  cutoffText: { fontSize: 12, color: colors.neutral400, fontStyle: 'italic' },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing['3xl'] },
+  emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.neutral900, marginBottom: spacing.sm },
+  emptySubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },
 })

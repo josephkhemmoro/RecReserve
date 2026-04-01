@@ -1,61 +1,53 @@
-import { View, Text, Image, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { getRelativeTime } from '../../lib/timeHelpers'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { Avatar, Icon } from '../ui'
 
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase()
+const EVENT_CONFIG = {
+  booking: { icon: 'tennisball-outline', color: colors.primary },
+  streak_milestone: { icon: 'flame', color: colors.streak },
+  kudos: { icon: 'heart-outline', color: colors.kudos },
+  event_created: { icon: 'calendar-outline', color: colors.info },
+  member_joined: { icon: 'person-add-outline', color: colors.success },
 }
 
-function formatFeedTime(timeStr) {
-  const d = new Date(timeStr)
-  return d.toLocaleString('en-US', {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  })
-}
-
-function getFeedContent(event) {
+function getFeedText(event) {
   const name = event.actor?.full_name || 'Someone'
   const meta = event.metadata || {}
 
   switch (event.event_type) {
     case 'booking':
-      return { icon: '🎾', text: `booked ${meta.court_name || 'a court'}`, name }
+      return { text: `booked ${meta.court_name || 'a court'}`, name }
     case 'streak_milestone':
-      return { icon: '🔥', text: `hit a ${meta.milestone}-week streak! ${meta.milestone_label || ''}`, name }
+      return { text: `hit a ${meta.milestone}-week streak! ${meta.milestone_label || ''}`, name }
     case 'kudos':
-      return { icon: '🤝', text: `sent kudos to ${meta.receiver_name || 'a teammate'}`, name }
+      return { text: `sent kudos to ${meta.receiver_name || 'a teammate'}`, name }
     case 'event_created':
-      return { icon: '📅', text: `New event: ${meta.event_title || 'Untitled'}`, name: '' }
+      return { text: `New event: ${meta.event_title || 'Untitled'}`, name: '' }
     case 'member_joined':
-      return { icon: '👋', text: 'joined the club!', name }
+      return { text: 'joined the club', name }
     default:
-      return { icon: '📣', text: 'did something', name }
+      return { text: 'did something', name }
   }
 }
 
 export function FeedItem({ event }) {
-  const { icon, text, name } = getFeedContent(event)
+  const { text, name } = getFeedText(event)
+  const config = EVENT_CONFIG[event.event_type] || EVENT_CONFIG.booking
   const actor = event.actor
 
   return (
     <View style={styles.container}>
-      {actor?.avatar_url ? (
-        <Image source={{ uri: actor.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={styles.avatarFallback}>
-          <Text style={styles.avatarText}>{getInitials(actor?.full_name)}</Text>
-        </View>
-      )}
+      <Avatar uri={actor?.avatar_url} name={actor?.full_name || '?'} size="sm" />
       <View style={styles.content}>
         <Text style={styles.text} numberOfLines={2}>
-          <Text style={styles.icon}>{icon} </Text>
           {name ? <Text style={styles.name}>{name} </Text> : null}
           <Text>{text}</Text>
         </Text>
-        <Text style={styles.time}>{getRelativeTime(event.created_at)}</Text>
+        <View style={styles.meta}>
+          <Icon name={config.icon} size="sm" color={config.color} />
+          <Text style={styles.time}>{getRelativeTime(event.created_at)}</Text>
+        </View>
       </View>
     </View>
   )
@@ -63,48 +55,13 @@ export function FeedItem({ event }) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    gap: 10,
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingVertical: spacing.md, borderBottomWidth: 1,
+    borderBottomColor: colors.neutral100, gap: spacing.sm,
   },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  avatarFallback: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
-  },
-  content: {
-    flex: 1,
-  },
-  text: {
-    fontSize: 14,
-    color: '#1e293b',
-    lineHeight: 20,
-  },
-  icon: {
-    fontSize: 14,
-  },
-  name: {
-    fontWeight: '700',
-  },
-  time: {
-    fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
+  content: { flex: 1 },
+  text: { ...textStyles.bodySmall, color: colors.neutral700, lineHeight: 20 },
+  name: { fontWeight: '700', color: colors.neutral900 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },
+  time: { ...textStyles.caption, color: colors.neutral400 },
 })

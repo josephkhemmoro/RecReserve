@@ -144,7 +144,7 @@ export default function OnboardingPage() {
         user_id: session.user.id,
         club_id: newClub.id,
         tier: "premium",
-        start_date: new Date().toISOString().split("T")[0],
+        start_date: new Date().toLocaleDateString("en-CA"),
         is_active: true,
       });
 
@@ -197,7 +197,7 @@ export default function OnboardingPage() {
                 idx < step
                   ? "bg-green-500 text-white"
                   : idx === step
-                  ? "bg-blue-600 text-white"
+                  ? "bg-brand text-white"
                   : "bg-slate-200 text-slate-500"
               }`}
             >
@@ -232,7 +232,7 @@ export default function OnboardingPage() {
                 type="text"
                 value={club.name}
                 onChange={(e) => setClub({ ...club, name: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Oakwood Tennis Club"
               />
             </div>
@@ -242,7 +242,7 @@ export default function OnboardingPage() {
                 type="text"
                 value={club.location}
                 onChange={(e) => setClub({ ...club, location: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="123 Main St, City, State"
               />
             </div>
@@ -263,7 +263,7 @@ export default function OnboardingPage() {
                 type="text"
                 value={court.name}
                 onChange={(e) => setCourt({ ...court, name: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Court 1"
               />
             </div>
@@ -276,7 +276,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={() => updateAvail(idx, "enabled", !availability[idx].enabled)}
                   className={`relative w-9 h-5 rounded-full transition-colors ${
-                    availability[idx].enabled ? "bg-blue-600" : "bg-slate-300"
+                    availability[idx].enabled ? "bg-brand" : "bg-slate-300"
                   }`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
@@ -308,19 +308,19 @@ export default function OnboardingPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Max Duration (min)</label>
-              <input type="number" min={15} step={15} value={rules.max_booking_duration_mins} onChange={(e) => setRules({ ...rules, max_booking_duration_mins: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" min={15} step={15} value={rules.max_booking_duration_mins} onChange={(e) => setRules({ ...rules, max_booking_duration_mins: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Advance Booking (days)</label>
-              <input type="number" min={1} value={rules.advance_booking_days} onChange={(e) => setRules({ ...rules, advance_booking_days: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" min={1} value={rules.advance_booking_days} onChange={(e) => setRules({ ...rules, advance_booking_days: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Cancellation Cutoff (hrs)</label>
-              <input type="number" min={0} value={rules.cancellation_cutoff_hours} onChange={(e) => setRules({ ...rules, cancellation_cutoff_hours: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" min={0} value={rules.cancellation_cutoff_hours} onChange={(e) => setRules({ ...rules, cancellation_cutoff_hours: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Max Active Bookings</label>
-              <input type="number" min={1} value={rules.max_active_bookings_per_user} onChange={(e) => setRules({ ...rules, max_active_bookings_per_user: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input type="number" min={1} value={rules.max_active_bookings_per_user} onChange={(e) => setRules({ ...rules, max_active_bookings_per_user: Number(e.target.value) })} className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30" />
             </div>
           </div>
         </div>
@@ -342,7 +342,7 @@ export default function OnboardingPage() {
             <div className="space-y-3">
               <a
                 href={stripeOnboardingUrl}
-                className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                className="inline-block px-6 py-3 bg-brand text-white font-medium rounded-lg hover:bg-brand-dark transition-colors"
               >
                 Set Up Stripe Payments
               </a>
@@ -356,7 +356,7 @@ export default function OnboardingPage() {
           ) : (
             <button
               onClick={() => router.replace("/")}
-              className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-6 py-3 bg-brand text-white font-medium rounded-lg hover:bg-brand-dark transition-colors"
             >
               Go to Dashboard
             </button>
@@ -380,7 +380,7 @@ export default function OnboardingPage() {
           <button
             onClick={handleNext}
             disabled={!canProceed() || saving}
-            className="px-6 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors"
           >
             {saving ? "Setting up..." : step === 2 ? "Complete Setup" : "Next"}
           </button>

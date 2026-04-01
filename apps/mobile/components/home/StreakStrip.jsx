@@ -1,53 +1,40 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { TouchableOpacity, Text, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { Icon } from '../ui'
 
-export function StreakStrip({ currentStreak, longestStreak, freezesRemaining }) {
+export function StreakStrip({ currentStreak, longestStreak }) {
   const router = useRouter()
 
   if (currentStreak === 0) {
     return (
-      <TouchableOpacity
-        style={styles.container}
-        onPress={() => router.push('/courts')}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.zeroText}>🎾 Start your streak — book a court!</Text>
+      <TouchableOpacity style={[styles.container, styles.containerZero]} onPress={() => {}} activeOpacity={0.7}>
+        <Icon name="tennisball-outline" size="sm" color={colors.neutral500} />
+        <Text style={styles.zeroText}>Start your streak — book a court!</Text>
       </TouchableOpacity>
     )
   }
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={() => router.push('/(tabs)/profile')}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.streakText}>
-        🔥 <Text style={styles.bold}>{currentStreak} week streak</Text>
+    <TouchableOpacity style={styles.container} onPress={() => router.push('/(tabs)/profile')} activeOpacity={0.7}>
+      <Icon name="flame" size="sm" color={colors.streak} />
+      <Text style={styles.text}>
+        <Text style={styles.bold}>{currentStreak} week streak</Text>
+        {'  ·  Best: '}{longestStreak}
       </Text>
-      <Text style={styles.dot}>·</Text>
-      <Text style={styles.mutedText}>Longest: {longestStreak}</Text>
-      <Text style={styles.dot}>·</Text>
-      <Text style={styles.mutedText}>🧊 {freezesRemaining}</Text>
     </TouchableOpacity>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#eff6ff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 16,
-    flexWrap: 'wrap',
-    gap: 4,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginHorizontal: spacing.lg, marginVertical: spacing.sm,
+    backgroundColor: colors.streakLight, borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
   },
-  streakText: { fontSize: 13, color: '#1e293b' },
+  containerZero: { backgroundColor: colors.neutral50 },
+  text: { ...textStyles.bodySmall, color: colors.neutral700 },
   bold: { fontWeight: '700' },
-  dot: { color: '#cbd5e1', fontSize: 13 },
-  mutedText: { fontSize: 12, color: '#64748b' },
-  zeroText: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  zeroText: { ...textStyles.bodySmall, color: colors.neutral500, fontWeight: '600' },
 })

@@ -1,24 +1,25 @@
 import { useState } from 'react'
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native'
-import Ionicons from '@expo/vector-icons/Ionicons'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { Icon, Button, Badge, SectionHeader } from '../ui'
 
-const EVENT_ICONS = {
-  tournament: '🏆',
-  open_play: '🎾',
-  clinic: '📚',
-  lesson: '🎓',
-}
+const EVENT_ICONS = { tournament: 'trophy-outline', open_play: 'tennisball-outline', clinic: 'school-outline', lesson: 'book-outline' }
 
 function formatEventDate(startTime, endTime) {
   const start = new Date(startTime)
   const end = endTime ? new Date(endTime) : null
-  const dateStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const now = new Date()
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1)
+  let dayStr
+  if (start.toDateString() === now.toDateString()) dayStr = 'Today'
+  else if (start.toDateString() === tomorrow.toDateString()) dayStr = 'Tomorrow'
+  else dayStr = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (!end) return `${dateStr} · ${startStr}`
+  if (!end) return `${dayStr} · ${startStr}`
   const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  return `${dateStr} · ${startStr} - ${endStr}`
+  return `${dayStr} · ${startStr} - ${endStr}`
 }
 
 export function ClubEventsList({ upcomingEvents, pastEvents, isMember }) {
@@ -30,115 +31,56 @@ export function ClubEventsList({ upcomingEvents, pastEvents, isMember }) {
     if (!user?.id) return
     setRegisteringId(eventId)
     try {
-      const { error } = await supabase.from('event_registrations').insert({
-        event_id: eventId,
-        user_id: user.id,
-        status: 'registered',
-      })
-      if (error) {
-        if (error.code === '23505') {
-          Alert.alert('Already Registered', 'You are already registered for this event.')
-        } else {
-          throw error
-        }
-      } else {
-        Alert.alert('Registered!', 'You have been registered for this event.')
-      }
-    } catch (err) {
-      console.error('Error registering:', err)
-      Alert.alert('Error', 'Failed to register. Please try again.')
-    } finally {
-      setRegisteringId(null)
-    }
+      const { error } = await supabase.from('event_registrations').insert({ event_id: eventId, user_id: user.id, status: 'registered' })
+      if (error) { if (error.code === '23505') Alert.alert('Already Registered'); else throw error }
+      else Alert.alert('Registered!', 'You have been registered for this event.')
+    } catch { Alert.alert('Error', 'Failed to register.') } finally { setRegisteringId(null) }
   }
 
   const hasUpcoming = upcomingEvents && upcomingEvents.length > 0
   const hasPast = pastEvents && pastEvents.length > 0
 
   if (!hasUpcoming && !hasPast) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerIcon}>📅</Text>
-          <Text style={styles.title}>Events & Tournaments</Text>
-        </View>
-        <Text style={styles.emptyText}>No events yet.</Text>
-      </View>
-    )
+    return <View style={styles.container}><SectionHeader title="Events" icon="calendar-outline" /><Text style={styles.emptyText}>No events yet.</Text></View>
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerIcon}>📅</Text>
-        <Text style={styles.title}>Events & Tournaments</Text>
-      </View>
-
+      <SectionHeader title="Events" icon="calendar-outline" />
       {hasUpcoming && (
         <>
-          <Text style={styles.subHeader}>Upcoming</Text>
+          <Text style={styles.subHeader}>UPCOMING</Text>
           {upcomingEvents.map((event) => {
-            const icon = EVENT_ICONS[event.event_type] || '📅'
-            const capacityText = event.max_participants
-              ? `${event.registered_count}/${event.max_participants} registered`
-              : `${event.registered_count} registered`
+            const iconName = EVENT_ICONS[event.event_type] || 'calendar-outline'
+            const capacityText = event.max_participants ? `${event.registered_count}/${event.max_participants} registered` : `${event.registered_count} registered`
             const priceText = event.price > 0 ? `$${event.price}` : 'Free'
-
             return (
               <View key={event.id} style={styles.eventCard}>
-                <Text style={styles.eventTitle}>{icon} {event.title}</Text>
-                <Text style={styles.eventType}>
-                  {(event.event_type || '').replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())}
-                  {' · '}
-                  {formatEventDate(event.start_time, event.end_time)}
-                </Text>
+                <View style={styles.eventTitleRow}><Icon name={iconName} size="md" color={colors.primary} /><Text style={styles.eventTitle}>{event.title}</Text></View>
+                <Text style={styles.eventMeta}>{formatEventDate(event.start_time, event.end_time)}</Text>
                 <Text style={styles.eventMeta}>{capacityText} · {priceText}</Text>
-                {event.description && (
-                  <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>
-                )}
-                {isMember && (
-                  <TouchableOpacity
-                    style={styles.registerBtn}
-                    onPress={() => handleRegister(event.id)}
-                    disabled={registeringId === event.id}
-                  >
-                    <Text style={styles.registerText}>
-                      {registeringId === event.id ? 'Registering...' : 'Register'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                {event.description && <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>}
+                {isMember && <Button title={registeringId === event.id ? 'Registering...' : 'Register'} onPress={() => handleRegister(event.id)} variant="primary" size="sm" fullWidth disabled={registeringId === event.id} />}
               </View>
             )
           })}
         </>
       )}
-
       {hasPast && (
         <>
-          <TouchableOpacity
-            style={styles.pastToggle}
-            onPress={() => setShowPast(!showPast)}
-          >
-            <Text style={styles.pastToggleText}>
-              {showPast ? 'Hide past events' : 'Show past events'}
-            </Text>
-            <Ionicons name={showPast ? 'chevron-up' : 'chevron-down'} size={16} color="#64748b" />
+          <TouchableOpacity style={styles.pastToggle} onPress={() => setShowPast(!showPast)}>
+            <Text style={styles.pastToggleText}>{showPast ? 'Hide past events' : 'Show past events'}</Text>
+            <Icon name={showPast ? 'chevron-up' : 'chevron-down'} size="sm" color={colors.neutral500} />
           </TouchableOpacity>
-
-          {showPast && pastEvents.map((event) => {
-            const icon = EVENT_ICONS[event.event_type] || '📅'
-            return (
-              <View key={event.id} style={styles.pastCard}>
-                <Text style={styles.pastTitle}>{icon} {event.title}</Text>
-                <Text style={styles.pastMeta}>
-                  {new Date(event.start_time).toLocaleDateString('en-US', {
-                    month: 'short', day: 'numeric', year: 'numeric',
-                  })}
-                  {event.price > 0 ? ` · $${event.price}` : ' · Free'}
-                </Text>
+          {showPast && pastEvents.map((event) => (
+            <View key={event.id} style={styles.pastCard}>
+              <Icon name={EVENT_ICONS[event.event_type] || 'calendar-outline'} size="sm" color={colors.neutral400} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pastTitle}>{event.title}</Text>
+                <Text style={styles.pastMeta}>{new Date(event.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}{event.price > 0 ? ` · $${event.price}` : ' · Free'}</Text>
               </View>
-            )
-          })}
+            </View>
+          ))}
         </>
       )}
     </View>
@@ -146,32 +88,17 @@ export function ClubEventsList({ upcomingEvents, pastEvents, isMember }) {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 20, marginBottom: 20 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  headerIcon: { fontSize: 18 },
-  title: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
-  emptyText: { fontSize: 14, color: '#94a3b8' },
-  subHeader: { fontSize: 13, fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: 8 },
-  eventCard: {
-    backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 8,
-  },
-  eventTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  eventType: { fontSize: 13, color: '#64748b', marginBottom: 2 },
-  eventMeta: { fontSize: 13, color: '#94a3b8', marginBottom: 4 },
-  eventDesc: { fontSize: 13, color: '#475569', lineHeight: 18, marginBottom: 8 },
-  registerBtn: {
-    backgroundColor: '#2563eb', borderRadius: 8, paddingVertical: 8, alignItems: 'center', marginTop: 4,
-  },
-  registerText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
-  pastToggle: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
-    paddingVertical: 12, marginTop: 8,
-  },
-  pastToggleText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-  pastCard: {
-    backgroundColor: '#f8fafc', borderRadius: 10, padding: 12, marginBottom: 6,
-  },
-  pastTitle: { fontSize: 14, fontWeight: '600', color: '#475569' },
-  pastMeta: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+  container: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  emptyText: { ...textStyles.bodySmall, color: colors.neutral400 },
+  subHeader: { ...textStyles.labelUpper, color: colors.neutral400, marginBottom: spacing.sm },
+  eventCard: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.base, borderWidth: 1, borderColor: colors.neutral100, marginBottom: spacing.sm, gap: spacing.xs },
+  eventTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  eventTitle: { ...textStyles.bodyMedium, color: colors.neutral900, flex: 1 },
+  eventMeta: { ...textStyles.caption, color: colors.neutral500 },
+  eventDesc: { ...textStyles.bodySmall, color: colors.neutral600, lineHeight: 18 },
+  pastToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs, paddingVertical: spacing.md, marginTop: spacing.sm },
+  pastToggleText: { ...textStyles.label, color: colors.neutral500 },
+  pastCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, backgroundColor: colors.neutral50, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.xs },
+  pastTitle: { ...textStyles.bodySmall, fontWeight: '600', color: colors.neutral600 },
+  pastMeta: { ...textStyles.caption, color: colors.neutral400, marginTop: 2 },
 })

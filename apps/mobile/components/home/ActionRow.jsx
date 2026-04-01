@@ -1,10 +1,12 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
+import { colors, textStyles, spacing, borderRadius, shadows } from '../../theme'
+import { Icon } from '../ui'
 
 const ACTIONS = [
-  { key: 'book', emoji: '🎾', label: 'Book', route: '/courts' },
-  { key: 'players', emoji: '🤝', label: 'Players', route: '/players' },
-  { key: 'events', emoji: '📅', label: 'Events', route: null }, // will navigate to club profile
+  { key: 'book', icon: 'tennisball-outline', label: 'Book', route: '/courts' },
+  { key: 'players', icon: 'people-outline', label: 'Players', route: '/players' },
+  { key: 'events', icon: 'calendar-outline', label: 'Events', route: null },
 ]
 
 export function ActionRow({ clubId }) {
@@ -19,15 +21,14 @@ export function ActionRow({ clubId }) {
           key={action.key}
           style={styles.button}
           onPress={() => {
-            if (action.route) {
-              router.push(action.route)
-            } else {
-              router.push(`/club/${clubId}`)
-            }
+            if (action.route) router.push(action.route)
+            else router.push(`/club/${clubId}`)
           }}
           activeOpacity={0.7}
         >
-          <Text style={styles.emoji}>{action.emoji}</Text>
+          <View style={styles.iconCircle}>
+            <Icon name={action.icon} size="md" color={colors.primary} />
+          </View>
           <Text style={styles.label}>{action.label}</Text>
         </TouchableOpacity>
       ))}
@@ -36,19 +37,20 @@ export function ActionRow({ clubId }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-  },
+  container: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.base },
   button: {
     flex: 1,
-    backgroundColor: '#eff6ff',
-    borderRadius: 14,
-    paddingVertical: 14,
     alignItems: 'center',
-    gap: 4,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
+    ...shadows.sm,
+    gap: spacing.sm,
   },
-  emoji: { fontSize: 20 },
-  label: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  iconCircle: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.primarySurface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  label: { ...textStyles.label, color: colors.neutral800 },
 })

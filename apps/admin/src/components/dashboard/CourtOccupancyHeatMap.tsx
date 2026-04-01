@@ -87,7 +87,7 @@ export function CourtOccupancyHeatMap({ courts, occupancyPercent, isLoading }: P
               <div
                 key={h}
                 className={`flex-1 text-center text-xs font-medium pb-2 ${
-                  Math.floor(nowMins / 60) === h ? "text-blue-600 font-bold" : "text-slate-400"
+                  Math.floor(nowMins / 60) === h ? "text-brand font-bold" : "text-slate-400"
                 }`}
               >
                 {formatHour(h)}
@@ -128,7 +128,7 @@ export function CourtOccupancyHeatMap({ courts, occupancyPercent, isLoading }: P
                       <div
                         key={h}
                         className={`flex-1 h-10 rounded mx-px ${cellClass} ${
-                          isCurrent ? "ring-2 ring-blue-400" : ""
+                          isCurrent ? "ring-2 ring-brand-light" : ""
                         } ${booking ? "cursor-pointer" : ""}`}
                         onMouseEnter={(e) => {
                           if (booking) {

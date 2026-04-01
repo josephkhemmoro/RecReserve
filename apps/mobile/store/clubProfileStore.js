@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { toLocalISO } from '../lib/dateUtils'
 
 export const useClubProfileStore = create((set) => ({
   profileData: null,
@@ -58,7 +59,7 @@ export const useClubProfileStore = create((set) => ({
       let pastEvents = null
 
       if (isMember) {
-        const now = new Date().toISOString()
+        const now = toLocalISO(new Date())
 
         const [annRes, upcomingRes, pastRes] = await Promise.all([
           supabase

@@ -2,13 +2,10 @@ import { useState } from 'react'
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
   ActivityIndicator,
-  Alert,
-  Switch,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native'
@@ -21,8 +18,8 @@ import { useBookingStore } from '../../store/bookingStore'
 import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
 import { useStreakStore } from '../../store/streakStore'
+import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 
-const REPEAT_OPTIONS = [2, 4, 8, 12]
 
 function formatTime12(time24) {
   const [h, m] = time24.split(':').map(Number)
@@ -42,12 +39,6 @@ export default function BookingConfirmScreen() {
     endTime,
     durationMinutes,
     priceBreakdown,
-    repeatWeekly,
-    repeatWeeks,
-    guests,
-    setRepeatWeekly,
-    setRepeatWeeks,
-    setGuests,
     clearBooking,
   } = useBookingStore()
   const { selectedClub } = useClubStore()
@@ -55,12 +46,11 @@ export default function BookingConfirmScreen() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [guestInput, setGuestInput] = useState('')
 
   if (!selectedCourt || !selectedDate || !startTime || !endTime) {
     return (
       <View style={styles.centered}>
-        <Ionicons name="alert-circle-outline" size={48} color="#94a3b8" />
+        <Ionicons name="alert-circle-outline" size={48} color={colors.neutral400} />
         <Text style={styles.errorTitle}>No booking details</Text>
         <Text style={styles.errorSubtitle}>Please select a court and time first</Text>
         <TouchableOpacity style={styles.goBackBtn} onPress={() => router.back()}>
@@ -75,9 +65,6 @@ export default function BookingConfirmScreen() {
   const discountAmount = priceBreakdown?.discount_amount ?? 0
   const finalPrice = priceBreakdown?.final_price ?? 0
 
-  const totalSessions = repeatWeekly ? repeatWeeks : 1
-  const totalPrice = finalPrice * totalSessions
-
   const formatDisplayDate = () => {
     return new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long',
@@ -85,28 +72,6 @@ export default function BookingConfirmScreen() {
       day: 'numeric',
       year: 'numeric',
     })
-  }
-
-  const addGuest = () => {
-    const name = guestInput.trim()
-    if (!name) return
-    setGuests([...guests, name])
-    setGuestInput('')
-  }
-
-  const removeGuest = (idx) => {
-    setGuests(guests.filter((_, i) => i !== idx))
-  }
-
-  const generateWeeklyDates = () => {
-    const dates = []
-    const base = new Date(selectedDate + 'T00:00:00')
-    for (let i = 0; i < repeatWeeks; i++) {
-      const d = new Date(base)
-      d.setDate(base.getDate() + i * 7)
-      dates.push(d.toISOString().split('T')[0])
-    }
-    return dates
   }
 
   const handleConfirm = async () => {
@@ -117,12 +82,12 @@ export default function BookingConfirmScreen() {
       let paymentIntentId = null
 
       // Skip Stripe if free
-      if (!isFree && totalPrice > 0) {
+      if (!isFree && finalPrice > 0) {
         const { data: paymentData, error: fnError } = await supabase.functions.invoke(
           'create-payment-intent',
           {
             body: {
-              amount: Math.round(totalPrice * 100),
+              amount: Math.round(finalPrice * 100),
               court_id: selectedCourt.id,
               user_id: user?.id,
               club_id: selectedClub?.id,
@@ -153,38 +118,28 @@ export default function BookingConfirmScreen() {
         }
       }
 
-      // Create reservations
-      const seriesId = repeatWeekly ? crypto.randomUUID() : null
-      const datesToBook = repeatWeekly ? generateWeeklyDates() : [selectedDate]
-      const skippedDates = []
+      // Create reservation
+      const tzOffset = new Date().getTimezoneOffset()
+      const tzSign = tzOffset <= 0 ? '+' : '-'
+      const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0')
+      const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0')
+      const tzStr = `${tzSign}${tzHours}:${tzMins}`
 
-      for (const dateStr of datesToBook) {
-        const startDT = `${dateStr}T${startTime}:00`
-        const endDT = `${dateStr}T${endTime}:00`
+      const startDT = `${selectedDate}T${startTime}:00${tzStr}`
+      const endDT = `${selectedDate}T${endTime}:00${tzStr}`
 
-        const { error: resErr } = await supabase.from('reservations').insert({
-          court_id: selectedCourt.id,
-          user_id: user?.id,
-          club_id: selectedClub?.id,
-          start_time: startDT,
-          end_time: endDT,
-          status: 'confirmed',
-          guest_count: guests.length,
-          guests: guests.length > 0 ? guests : [],
-          stripe_payment_id: paymentIntentId,
-          amount_paid: isFree ? 0 : finalPrice,
-          series_id: seriesId,
-        })
+      const { error: resErr } = await supabase.from('reservations').insert({
+        court_id: selectedCourt.id,
+        user_id: user?.id,
+        club_id: selectedClub?.id,
+        start_time: startDT,
+        end_time: endDT,
+        status: 'confirmed',
+        stripe_payment_id: paymentIntentId,
+        amount_paid: isFree ? 0 : finalPrice,
+      })
 
-        if (resErr) skippedDates.push(dateStr)
-      }
-
-      if (skippedDates.length > 0) {
-        Alert.alert(
-          'Some Dates Skipped',
-          `${skippedDates.length} date(s) were already booked and were skipped.`
-        )
-      }
+      if (resErr) throw new Error('Failed to create reservation')
 
       // Fire-and-forget streak update — don't block booking flow
       if (user?.id && selectedClub?.id) {
@@ -209,7 +164,7 @@ export default function BookingConfirmScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
-            <Ionicons name="arrow-back" size={22} color="#2563eb" />
+            <Ionicons name="arrow-back" size={22} color={colors.primary} />
             <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Confirm Booking</Text>
@@ -223,13 +178,13 @@ export default function BookingConfirmScreen() {
 
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="calendar-outline" size={16} color="#64748b" />
+              <Ionicons name="calendar-outline" size={16} color={colors.neutral500} />
               <Text style={styles.detailValue}>{formatDisplayDate()}</Text>
             </View>
           </View>
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="time-outline" size={16} color="#64748b" />
+              <Ionicons name="time-outline" size={16} color={colors.neutral500} />
               <Text style={styles.detailValue}>
                 {formatTime12(startTime)} – {formatTime12(endTime)}
               </Text>
@@ -237,7 +192,7 @@ export default function BookingConfirmScreen() {
           </View>
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Ionicons name="hourglass-outline" size={16} color="#64748b" />
+              <Ionicons name="hourglass-outline" size={16} color={colors.neutral500} />
               <Text style={styles.detailValue}>
                 {durationMinutes >= 60
                   ? `${Math.floor(durationMinutes / 60)}h${durationMinutes % 60 > 0 ? ` ${durationMinutes % 60}m` : ''}`
@@ -245,72 +200,6 @@ export default function BookingConfirmScreen() {
               </Text>
             </View>
           </View>
-        </View>
-
-        {/* Repeat Weekly */}
-        <View style={styles.sectionCard}>
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleLabel}>
-              <Ionicons name="repeat-outline" size={18} color="#1e293b" />
-              <Text style={styles.sectionLabel}>Repeat Weekly</Text>
-            </View>
-            <Switch
-              value={repeatWeekly}
-              onValueChange={setRepeatWeekly}
-              trackColor={{ false: '#e2e8f0', true: '#bfdbfe' }}
-              thumbColor={repeatWeekly ? '#2563eb' : '#f8fafc'}
-            />
-          </View>
-          {repeatWeekly && (
-            <View style={styles.repeatOptions}>
-              {REPEAT_OPTIONS.map((w) => (
-                <TouchableOpacity
-                  key={w}
-                  style={[styles.repeatChip, repeatWeeks === w && styles.repeatChipActive]}
-                  onPress={() => setRepeatWeeks(w)}
-                >
-                  <Text
-                    style={[
-                      styles.repeatChipText,
-                      repeatWeeks === w && styles.repeatChipTextActive,
-                    ]}
-                  >
-                    {w} wk
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Guests */}
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="people-outline" size={18} color="#1e293b" />
-            <Text style={styles.sectionLabel}>Guests</Text>
-          </View>
-          <View style={styles.guestInputRow}>
-            <TextInput
-              style={styles.guestInput}
-              placeholder="Guest name"
-              placeholderTextColor="#9ca3af"
-              value={guestInput}
-              onChangeText={setGuestInput}
-              onSubmitEditing={addGuest}
-              returnKeyType="done"
-            />
-            <TouchableOpacity style={styles.addGuestBtn} onPress={addGuest}>
-              <Ionicons name="add" size={20} color="#ffffff" />
-            </TouchableOpacity>
-          </View>
-          {guests.map((name, idx) => (
-            <View key={idx} style={styles.guestRow}>
-              <Text style={styles.guestName}>{name}</Text>
-              <TouchableOpacity onPress={() => removeGuest(idx)}>
-                <Ionicons name="close-circle" size={20} color="#ef4444" />
-              </TouchableOpacity>
-            </View>
-          ))}
         </View>
 
         {/* Price Breakdown */}
@@ -342,27 +231,20 @@ export default function BookingConfirmScreen() {
             </View>
           )}
 
-          {repeatWeekly && (
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>x {repeatWeeks} sessions</Text>
-              <Text style={styles.priceAmount}>${totalPrice.toFixed(2)}</Text>
-            </View>
-          )}
-
           <View style={styles.totalDivider} />
           <View style={styles.priceRow}>
             <Text style={styles.totalLabel}>Total</Text>
             {isFree ? (
               <Text style={styles.totalFree}>Free</Text>
             ) : (
-              <Text style={styles.totalAmount}>${totalPrice.toFixed(2)}</Text>
+              <Text style={styles.totalAmount}>${finalPrice.toFixed(2)}</Text>
             )}
           </View>
         </View>
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={16} color="#dc2626" />
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={styles.errorMessage}>{error}</Text>
           </View>
         ) : null}
@@ -379,10 +261,10 @@ export default function BookingConfirmScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.confirmButtonText}>
-              {isFree ? 'Confirm Booking' : `Confirm & Pay $${totalPrice.toFixed(2)}`}
+              {isFree ? 'Confirm Booking' : `Confirm & Pay $${finalPrice.toFixed(2)}`}
             </Text>
           )}
         </TouchableOpacity>
@@ -392,75 +274,75 @@ export default function BookingConfirmScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 60 },
+  container: { flex: 1, backgroundColor: colors.white, paddingTop: 60 },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 40,
-    gap: 8,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing['3xl'],
+    gap: spacing.sm,
   },
-  header: { paddingHorizontal: 20, marginBottom: 20 },
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
-  backText: { fontSize: 16, color: '#2563eb', fontWeight: '600' },
-  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
+  header: { paddingHorizontal: layout.screenPaddingH, marginBottom: spacing.lg },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.base },
+  backText: { fontSize: fontSizes.base, color: colors.primary, fontWeight: fontWeights.semibold },
+  title: { fontSize: 22, fontWeight: fontWeights.bold, color: colors.neutral900 },
 
   card: {
-    marginHorizontal: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
+    marginHorizontal: layout.screenPaddingH,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: layout.cardPaddingLg,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    marginBottom: 12,
+    borderColor: colors.neutral100,
+    marginBottom: layout.itemGap,
   },
-  courtName: { fontSize: 20, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 16 },
-  detailRow: { marginBottom: 10 },
-  detailItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  detailValue: { fontSize: 15, color: '#1e293b', fontWeight: '500' },
+  courtName: { fontSize: fontSizes.lg, fontWeight: fontWeights.bold, color: colors.neutral900, marginBottom: spacing.xs },
+  divider: { height: 1, backgroundColor: colors.neutral100, marginVertical: spacing.base },
+  detailRow: { marginBottom: spacing.md },
+  detailItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  detailValue: { fontSize: fontSizes.base, color: colors.neutral900, fontWeight: fontWeights.medium },
 
   sectionCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
+    marginHorizontal: layout.screenPaddingH,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: layout.cardPadding,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    marginBottom: 12,
+    borderColor: colors.neutral100,
+    marginBottom: layout.itemGap,
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  sectionLabel: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: layout.itemGap },
+  sectionLabel: { fontSize: fontSizes.base, fontWeight: fontWeights.semibold, color: colors.neutral900 },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  toggleLabel: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  repeatOptions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  toggleLabel: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  repeatOptions: { flexDirection: 'row', gap: spacing.sm, marginTop: layout.itemGap },
   repeatChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#f8fafc',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.neutral200,
   },
-  repeatChipActive: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  repeatChipText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  repeatChipTextActive: { color: '#ffffff' },
+  repeatChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  repeatChipText: { fontSize: fontSizes.sm, fontWeight: fontWeights.semibold, color: colors.neutral500 },
+  repeatChipTextActive: { color: colors.white },
 
-  guestInputRow: { flexDirection: 'row', gap: 8 },
+  guestInputRow: { flexDirection: 'row', gap: spacing.sm },
   guestInput: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 12,
+    borderColor: colors.neutral200,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
     fontSize: 14,
-    color: '#1e293b',
+    color: colors.neutral900,
   },
   addGuestBtn: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
     width: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -469,86 +351,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: colors.neutral100,
   },
-  guestName: { fontSize: 14, color: '#1e293b' },
+  guestName: { fontSize: 14, color: colors.neutral900 },
 
   // Price breakdown
   priceCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
+    marginHorizontal: layout.screenPaddingH,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: layout.cardPaddingLg,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    marginBottom: 12,
+    borderColor: colors.neutral100,
+    marginBottom: layout.itemGap,
   },
-  priceTitle: { fontSize: 16, fontWeight: '700', color: '#1e293b' },
+  priceTitle: { fontSize: fontSizes.base, fontWeight: fontWeights.bold, color: colors.neutral900 },
   priceRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  priceLabel: { fontSize: 14, color: '#64748b', flex: 1 },
-  priceAmount: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  priceLabel: { fontSize: 14, color: colors.neutral500, flex: 1 },
+  priceAmount: { fontSize: 14, fontWeight: fontWeights.semibold, color: colors.neutral900 },
   discountLabel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     flex: 1,
   },
-  discountText: { fontSize: 14, color: '#15803d', fontWeight: '500' },
-  discountAmount: { fontSize: 14, fontWeight: '600', color: '#15803d' },
-  totalDivider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 },
-  totalLabel: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  totalAmount: { fontSize: 22, fontWeight: '700', color: '#2563eb' },
-  totalFree: { fontSize: 22, fontWeight: '700', color: '#15803d' },
+  discountText: { fontSize: 14, color: colors.success, fontWeight: fontWeights.medium },
+  discountAmount: { fontSize: 14, fontWeight: fontWeights.semibold, color: colors.success },
+  totalDivider: { height: 1, backgroundColor: colors.neutral200, marginVertical: spacing.md },
+  totalLabel: { fontSize: 18, fontWeight: fontWeights.bold, color: colors.neutral900 },
+  totalAmount: { fontSize: 22, fontWeight: fontWeights.bold, color: colors.primary },
+  totalFree: { fontSize: 22, fontWeight: fontWeights.bold, color: colors.success },
 
   errorContainer: {
-    marginHorizontal: 20,
-    marginTop: 4,
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
+    marginHorizontal: layout.screenPaddingH,
+    marginTop: spacing.xs,
+    backgroundColor: colors.errorLight,
+    borderRadius: borderRadius.md,
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
-  errorMessage: { color: '#dc2626', fontSize: 14, flex: 1 },
-  errorTitle: { fontSize: 18, fontWeight: '600', color: '#1e293b' },
-  errorSubtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
+  errorMessage: { color: colors.error, fontSize: 14, flex: 1 },
+  errorTitle: { fontSize: 18, fontWeight: fontWeights.semibold, color: colors.neutral900 },
+  errorSubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },
   goBackBtn: {
-    marginTop: 12,
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    marginTop: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
   },
-  goBackText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
+  goBackText: { color: colors.white, fontSize: fontSizes.base, fontWeight: fontWeights.semibold },
 
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.white,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    borderTopColor: colors.neutral100,
+    paddingHorizontal: layout.screenPaddingH,
+    paddingTop: spacing.base,
     paddingBottom: 34,
   },
   confirmButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 14,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
     padding: 18,
     alignItems: 'center',
   },
   buttonDisabled: { opacity: 0.6 },
-  confirmButtonText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  confirmButtonText: { color: colors.white, fontSize: fontSizes.md, fontWeight: fontWeights.bold },
 })

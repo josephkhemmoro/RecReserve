@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { localDateStr } from "@/lib/dateUtils";
+import { PageHeader, Card, Button, FormInput, Modal } from "@/components/ui";
 
 function formatDateInput(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return localDateStr(d);
 }
 
 export default function WeatherClosurePage() {
@@ -108,40 +110,37 @@ export default function WeatherClosurePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900 mb-6">Weather Closure</h1>
+      <PageHeader title="Weather Closure" />
 
-      <div className="bg-white rounded-xl border border-slate-200 p-6 max-w-lg">
+      <Card className="max-w-lg">
         <p className="text-sm text-slate-600 mb-4">
           Cancel all reservations for a specific day due to weather conditions.
           All affected players will be notified.
         </p>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Closure Date
-          </label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => {
-              setSelectedDate(e.target.value);
-              setCount(null);
-              setResult("");
-            }}
-            className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+        <FormInput
+          label="Closure Date"
+          type="date"
+          value={selectedDate}
+          onChange={(v) => {
+            setSelectedDate(v);
+            setCount(null);
+            setResult("");
+          }}
+          className="mb-4"
+        />
 
-        <button
+        <Button
+          variant="secondary"
           onClick={checkReservations}
           disabled={loading || adminLoading}
-          className="px-4 py-2 bg-slate-800 text-white text-sm font-medium rounded-lg hover:bg-slate-900 disabled:opacity-50 transition-colors"
+          loading={loading}
         >
           {loading ? "Checking..." : "Check Reservations"}
-        </button>
+        </Button>
 
         {count !== null && (
-          <div className="mt-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
+          <div className="mt-4 p-4 rounded-lg bg-brand-surface border border-slate-200">
             <p className="text-sm text-slate-700">
               <span className="font-bold text-2xl text-slate-900">{count}</span>{" "}
               confirmed reservation{count !== 1 ? "s" : ""} on{" "}
@@ -152,12 +151,13 @@ export default function WeatherClosurePage() {
               })}
             </p>
             {count > 0 && (
-              <button
+              <Button
+                variant="danger"
                 onClick={() => setShowConfirm(true)}
-                className="mt-3 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                className="mt-3"
               >
                 Cancel All Reservations
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -166,44 +166,44 @@ export default function WeatherClosurePage() {
           <div
             className={`mt-4 px-4 py-3 rounded-lg text-sm font-medium ${
               result.includes("Error")
-                ? "bg-red-50 text-red-700"
-                : "bg-green-50 text-green-700"
+                ? "bg-error-light text-error"
+                : "bg-success-light text-success"
             }`}
           >
             {result}
           </div>
         )}
-      </div>
+      </Card>
 
-      {/* Confirmation Modal */}
-      {showConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">
-              Confirm Weather Closure
-            </h3>
-            <p className="text-sm text-slate-600 mb-6">
-              This will cancel <strong>{count}</strong> reservation{count !== 1 ? "s" : ""}{" "}
-              and notify all affected players. This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleCancelAll}
-                disabled={cancelling}
-                className="flex-1 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                {cancelling ? "Cancelling..." : "Yes, Cancel All"}
-              </button>
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50"
-              >
-                Go Back
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title="Confirm Weather Closure"
+        size="sm"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowConfirm(false)}
+            >
+              Go Back
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleCancelAll}
+              disabled={cancelling}
+              loading={cancelling}
+            >
+              {cancelling ? "Cancelling..." : "Yes, Cancel All"}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          This will cancel <strong>{count}</strong> reservation{count !== 1 ? "s" : ""}{" "}
+          and notify all affected players. This action cannot be undone.
+        </p>
+      </Modal>
     </div>
   );
 }

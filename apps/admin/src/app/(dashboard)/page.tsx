@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
-import { Sparkline } from "@/components/dashboard/Sparkline";
 import { CourtOccupancyHeatMap } from "@/components/dashboard/CourtOccupancyHeatMap";
 import { RevenueByCourtChart } from "@/components/dashboard/RevenueByCourtChart";
+import { StatCard, Card, Badge, Button, PageHeader, SkeletonCard, SkeletonTableRow } from "@/components/ui";
+import { localDayStart, localDayEnd, localMonthStart } from "@/lib/dateUtils";
 import {
   getDashboardTrends,
   getCourtOccupancy,
@@ -39,28 +40,16 @@ interface TodayReservation {
   user: { full_name: string; email: string } | null;
 }
 
-function StatSkeleton() {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-6 animate-pulse">
-      <div className="h-4 w-24 bg-slate-200 rounded mb-3" />
-      <div className="h-8 w-16 bg-slate-200 rounded" />
-    </div>
-  );
-}
-
-function TableSkeleton() {
-  return (
-    <div className="space-y-3">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex gap-4 animate-pulse">
-          <div className="h-5 flex-1 bg-slate-200 rounded" />
-          <div className="h-5 w-32 bg-slate-200 rounded" />
-          <div className="h-5 w-24 bg-slate-200 rounded" />
-          <div className="h-5 w-20 bg-slate-200 rounded" />
-        </div>
-      ))}
-    </div>
-  );
+function getTrend(data: number[] | undefined): { value: number; direction: "up" | "down" | "flat" } | undefined {
+  if (!data || data.length < 2) return undefined;
+  const first = data[0];
+  const last = data[data.length - 1];
+  if (first === 0 && last === 0) return { value: 0, direction: "flat" };
+  if (first === 0) return { value: 100, direction: "up" };
+  const pct = Math.round(((last - first) / first) * 100);
+  if (pct > 0) return { value: pct, direction: "up" };
+  if (pct < 0) return { value: Math.abs(pct), direction: "down" };
+  return { value: 0, direction: "flat" };
 }
 
 export default function DashboardPage() {
@@ -79,10 +68,9 @@ export default function DashboardPage() {
 
   const fetchDashboard = useCallback(async (clubId: string) => {
     const supabase = createClient();
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const todayStart = localDayStart();
+    const todayEnd = localDayEnd();
+    const monthStart = localMonthStart();
 
     try {
       const { data: clubData } = await supabase
@@ -113,14 +101,14 @@ export default function DashboardPage() {
             .select("id", { count: "exact", head: true })
             .eq("club_id", clubId)
             .gte("start_time", todayStart)
-            .lt("start_time", todayEnd),
+            .lte("start_time", todayEnd),
           supabase
             .from("reservations")
             .select("amount_paid")
             .eq("club_id", clubId)
             .eq("status", "confirmed")
             .gte("start_time", monthStart)
-            .lt("start_time", todayEnd),
+            .lte("start_time", todayEnd),
           supabase
             .from("reservations")
             .select(
@@ -128,7 +116,7 @@ export default function DashboardPage() {
             )
             .eq("club_id", clubId)
             .gte("start_time", todayStart)
-            .lt("start_time", todayEnd)
+            .lte("start_time", todayEnd)
             .order("start_time", { ascending: true })
             .limit(30),
           supabase
@@ -137,7 +125,7 @@ export default function DashboardPage() {
             .eq("club_id", clubId)
             .eq("status", "no_show")
             .gte("start_time", todayStart)
-            .lt("start_time", todayEnd),
+            .lte("start_time", todayEnd),
         ]);
 
       const revenue = (revenueRes.data ?? []).reduce(
@@ -305,11 +293,16 @@ export default function DashboardPage() {
   const now = new Date();
   const isPastReservation = (endTime: string) => new Date(endTime) < now;
 
+  const statusVariants: Record<string, "success" | "error" | "warning" | "default"> = {
+    confirmed: "success", cancelled: "error", completed: "default", no_show: "warning",
+  };
+  const statusLabels: Record<string, string> = {
+    confirmed: "Confirmed", cancelled: "Cancelled", completed: "Completed", no_show: "No-Show",
+  };
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900 mb-8">
-        Welcome back, {admin?.fullName || "..."}
-      </h1>
+      <PageHeader title={`Welcome back, ${admin?.fullName || "..."}`} />
 
       {/* Stripe Connect Banner */}
       {stripeStatus && !stripeStatus.onboardingComplete && (
@@ -324,7 +317,7 @@ export default function DashboardPage() {
             <div>
               <p
                 className={`font-semibold text-sm ${
-                  stripeStatus.connected ? "text-amber-800" : "text-blue-800"
+                  stripeStatus.connected ? "text-amber-800" : "text-brand-dark"
                 }`}
               >
                 {stripeStatus.connected
@@ -333,7 +326,7 @@ export default function DashboardPage() {
               </p>
               <p
                 className={`text-xs mt-0.5 ${
-                  stripeStatus.connected ? "text-amber-600" : "text-blue-600"
+                  stripeStatus.connected ? "text-amber-600" : "text-brand"
                 }`}
               >
                 {stripeStatus.connected
@@ -347,7 +340,7 @@ export default function DashboardPage() {
               className={`px-4 py-2 text-sm font-medium rounded-lg text-white transition-colors disabled:opacity-50 ${
                 stripeStatus.connected
                   ? "bg-amber-600 hover:bg-amber-700"
-                  : "bg-blue-600 hover:bg-blue-700"
+                  : "bg-brand hover:bg-brand-dark"
               }`}
             >
               {stripeLoading
@@ -364,39 +357,14 @@ export default function DashboardPage() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-4 mb-8">
         {isLoading ? (
-          <>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <StatSkeleton key={i} />
-            ))}
-          </>
+          [1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} />)
         ) : (
           <>
-            <StatCard
-              label="Court Utilization"
-              value={`${stats?.courtUtilization ?? 0}%`}
-              subtitle={`${stats?.totalCourts ?? 0} active courts`}
-              sparkline={trends?.courtUtilization}
-            />
-            <StatCard
-              label="Active Members"
-              value={String(stats?.activeMembers ?? 0)}
-              sparkline={trends?.newMembers}
-            />
-            <StatCard
-              label="Today's Reservations"
-              value={String(stats?.todayReservations ?? 0)}
-              sparkline={trends?.reservations}
-            />
-            <StatCard
-              label="Revenue This Month"
-              value={`$${(stats?.revenueThisMonth ?? 0).toFixed(2)}`}
-              sparkline={trends?.revenue}
-            />
-            <StatCard
-              label="No-Shows Today"
-              value={String(stats?.noShowsToday ?? 0)}
-              sparkline={trends?.noShows}
-            />
+            <StatCard label="Court Utilization" value={`${stats?.courtUtilization ?? 0}%`} subtitle={`${stats?.totalCourts ?? 0} active courts`} sparklineData={trends?.courtUtilization} trend={getTrend(trends?.courtUtilization)} />
+            <StatCard label="Active Members" value={String(stats?.activeMembers ?? 0)} sparklineData={trends?.newMembers} trend={getTrend(trends?.newMembers)} />
+            <StatCard label="Today's Reservations" value={String(stats?.todayReservations ?? 0)} sparklineData={trends?.reservations} trend={getTrend(trends?.reservations)} />
+            <StatCard label="Revenue This Month" value={`$${(stats?.revenueThisMonth ?? 0).toFixed(2)}`} sparklineData={trends?.revenue} trend={getTrend(trends?.revenue)} />
+            <StatCard label="No-Shows Today" value={String(stats?.noShowsToday ?? 0)} sparklineData={trends?.noShows} trend={getTrend(trends?.noShows)} />
           </>
         )}
       </div>
@@ -412,16 +380,10 @@ export default function DashboardPage() {
       <RevenueByCourtChart data={revenueData} isLoading={isLoading} />
 
       {/* Today's Reservations Table */}
-      <div className="bg-white rounded-xl border border-slate-200">
-        <div className="px-6 py-4 border-b border-slate-200">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Today&apos;s Reservations
-          </h2>
-        </div>
-
+      <Card title="Today's Schedule" noPadding>
         {isLoading ? (
-          <div className="p-6">
-            <TableSkeleton />
+          <div className="p-6 space-y-3">
+            {[1, 2, 3, 4].map((i) => <SkeletonTableRow key={i} />)}
           </div>
         ) : todayList.length === 0 ? (
           <div className="p-10 text-center">
@@ -464,7 +426,7 @@ export default function DashboardPage() {
                     {formatTime(r.start_time)} – {formatTime(r.end_time)}
                   </td>
                   <td className="px-6 py-3">
-                    <StatusBadge status={r.status} />
+                    <Badge label={statusLabels[r.status] ?? r.status} variant={statusVariants[r.status] ?? "default"} />
                   </td>
                   <td className="px-6 py-3">
                     {r.status === "confirmed" && isPastReservation(r.end_time) && (
@@ -482,56 +444,7 @@ export default function DashboardPage() {
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
     </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  subtitle,
-  sparkline,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  sparkline?: number[];
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5">
-      <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
-      <p className="text-2xl font-bold text-slate-900">{value}</p>
-      {subtitle && (
-        <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
-      )}
-      {sparkline && sparkline.length > 0 && <Sparkline data={sparkline} />}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    confirmed: "bg-green-50 text-green-700",
-    cancelled: "bg-red-50 text-red-700",
-    completed: "bg-slate-100 text-slate-600",
-    no_show: "bg-amber-50 text-amber-700",
-  };
-
-  const labels: Record<string, string> = {
-    confirmed: "Confirmed",
-    cancelled: "Cancelled",
-    completed: "Completed",
-    no_show: "No-Show",
-  };
-
-  return (
-    <span
-      className={`inline-block px-2.5 py-0.5 rounded-md text-xs font-semibold ${
-        styles[status] ?? "bg-slate-100 text-slate-600"
-      }`}
-    >
-      {labels[status] ?? status}
-    </span>
   );
 }

@@ -4,33 +4,66 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import { useAdminClub } from "@/lib/useAdminClub";
+import {
+  HomeIcon,
+  Squares2X2Icon,
+  CalendarDaysIcon,
+  CalendarIcon,
+  CloudIcon,
+  UsersIcon,
+  TagIcon,
+  MegaphoneIcon,
+  Cog6ToothIcon,
+  AdjustmentsHorizontalIcon,
+  ArrowRightStartOnRectangleIcon,
+} from "@heroicons/react/24/outline";
 
-interface NavItem {
+interface NavGroup {
   label: string;
-  href: string;
+  items: { label: string; href: string; icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }[];
 }
 
-const navItems: NavItem[] = [
-  { label: "Dashboard", href: "/" },
-  { label: "Courts", href: "/courts" },
-  { label: "Memberships", href: "/tier-pricing" },
-  { label: "Booking Rules", href: "/booking-rules" },
-  { label: "Members", href: "/members" },
-  { label: "Reservations", href: "/reservations" },
-  { label: "Weather Closure", href: "/weather-closure" },
-  { label: "Events", href: "/events" },
-  { label: "Announcements", href: "/announcements" },
+const navGroups: NavGroup[] = [
+  {
+    label: "Overview",
+    items: [{ label: "Dashboard", href: "/", icon: HomeIcon }],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Courts", href: "/courts", icon: Squares2X2Icon },
+      { label: "Reservations", href: "/reservations", icon: CalendarDaysIcon },
+      { label: "Events", href: "/events", icon: CalendarIcon },
+      { label: "Weather Closure", href: "/weather-closure", icon: CloudIcon },
+    ],
+  },
+  {
+    label: "Members",
+    items: [
+      { label: "Members", href: "/members", icon: UsersIcon },
+      { label: "Membership Tiers", href: "/tier-pricing", icon: TagIcon },
+    ],
+  },
+  {
+    label: "Engagement",
+    items: [{ label: "Announcements", href: "/announcements", icon: MegaphoneIcon }],
+  },
+  {
+    label: "Configuration",
+    items: [
+      { label: "Booking Rules", href: "/booking-rules", icon: AdjustmentsHorizontalIcon },
+      { label: "Club Settings", href: "/settings", icon: Cog6ToothIcon },
+    ],
+  },
 ];
 
 type StripeState = "loading" | "not_connected" | "pending" | "active";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { admin } = useAdminClub();
   const [authorized, setAuthorized] = useState(false);
   const [stripeState, setStripeState] = useState<StripeState>("loading");
 
@@ -38,149 +71,105 @@ export default function DashboardLayout({
     const checkAuth = async () => {
       try {
         const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session) {
-          router.replace("/login");
-          return;
-        }
-
-        const { data: profile } = await supabase
-          .from("users")
-          .select("role, club_id")
-          .eq("id", session.user.id)
-          .single();
-
-        if (profile?.role !== "admin") {
-          await supabase.auth.signOut();
-          router.replace("/login");
-          return;
-        }
-
-        if (!profile?.club_id && pathname !== "/onboarding") {
-          router.replace("/onboarding");
-          return;
-        }
-
-        // Check Stripe Connect status
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) { router.replace("/login"); return; }
+        const { data: profile } = await supabase.from("users").select("role, club_id").eq("id", session.user.id).single();
+        if (profile?.role !== "admin") { await supabase.auth.signOut(); router.replace("/login"); return; }
+        if (!profile?.club_id && pathname !== "/onboarding") { router.replace("/onboarding"); return; }
         if (profile?.club_id) {
-          const { data: club } = await supabase
-            .from("clubs")
-            .select("stripe_account_id, stripe_onboarding_complete")
-            .eq("id", profile.club_id)
-            .single();
-
-          if (club?.stripe_onboarding_complete) {
-            setStripeState("active");
-          } else if (club?.stripe_account_id) {
-            setStripeState("pending");
-          } else {
-            setStripeState("not_connected");
-          }
+          const { data: club } = await supabase.from("clubs").select("stripe_account_id, stripe_onboarding_complete").eq("id", profile.club_id).single();
+          if (club?.stripe_onboarding_complete) setStripeState("active");
+          else if (club?.stripe_account_id) setStripeState("pending");
+          else setStripeState("not_connected");
         }
-
         setAuthorized(true);
-      } catch {
-        router.replace("/login");
-      }
+      } catch { router.replace("/login"); }
     };
-
     checkAuth();
   }, [router, pathname]);
 
   const handleSignOut = async () => {
-    try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
-    } catch {
-      // proceed to redirect regardless
-    }
+    try { const supabase = createClient(); await supabase.auth.signOut(); } catch {}
     router.replace("/login");
   };
 
   if (!authorized) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-blue-600" />
+      <div className="flex min-h-screen items-center justify-center" style={{ background: "#f8f9fb" }}>
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300" style={{ borderTopColor: "#0D9488" }} />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen">
-      <nav className="fixed inset-y-0 left-0 w-64 bg-slate-900 flex flex-col">
-        <div className="px-6 py-6 border-b border-slate-800">
-          <h1 className="text-xl font-bold text-white">RecReserve</h1>
-          <p className="text-xs text-slate-500 mt-1">Admin Dashboard</p>
+      <nav className="fixed inset-y-0 left-0 w-60 flex flex-col z-40" style={{ background: "#0f172a" }}>
+        <div className="px-5 py-5" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#0D9488" }}>
+              <span className="text-white text-sm font-bold">R</span>
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-white">RecReserve</h1>
+              <p className="text-[11px] text-slate-500 truncate max-w-[140px]">{admin?.clubName || "Admin"}</p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800/50"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="px-3 mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        isActive
+                          ? "text-white"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                      style={isActive ? { background: "rgba(13,148,136,0.15)", color: "#5eead4" } : undefined}
+                    >
+                      <Icon className="w-[18px] h-[18px] flex-shrink-0" />
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
-        <div className="px-3 py-4 border-t border-slate-800 space-y-2">
-          <Link
-            href="/settings"
-            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-              pathname === "/settings"
-                ? "bg-slate-800 text-white"
-                : "text-slate-400 hover:text-white hover:bg-slate-800/50"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.248a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Settings
-          </Link>
+        <div className="px-3 py-4 space-y-1" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
           {stripeState !== "loading" && (
-            <div className="px-3 py-2 rounded-lg text-xs">
+            <div className="px-3 py-2 rounded-lg">
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full ${
-                  stripeState === "active"
-                    ? "bg-green-400"
-                    : stripeState === "pending"
-                    ? "bg-amber-400"
-                    : "bg-red-400"
+                  stripeState === "active" ? "bg-emerald-400" : stripeState === "pending" ? "bg-amber-400" : "bg-red-400"
                 }`} />
-                <span className="text-slate-400">
-                  {stripeState === "active"
-                    ? "Stripe Connected"
-                    : stripeState === "pending"
-                    ? "Stripe Pending"
-                    : "Stripe Not Set Up"}
+                <span className="text-[11px] text-slate-500">
+                  {stripeState === "active" ? "Stripe Connected" : stripeState === "pending" ? "Stripe Pending" : "Stripe Not Set Up"}
                 </span>
               </div>
             </div>
           )}
           <button
             onClick={handleSignOut}
-            className="w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 text-left transition-colors"
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm font-medium text-slate-400 hover:text-white text-left transition-colors cursor-pointer"
           >
+            <ArrowRightStartOnRectangleIcon className="w-[18px] h-[18px]" />
             Sign Out
           </button>
         </div>
       </nav>
 
-      <main className="flex-1 ml-64 p-8 bg-slate-50 min-h-screen">
-        {children}
+      <main className="flex-1 ml-60 p-8 min-h-screen" style={{ background: "#f8f9fb" }}>
+        <div className="max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
   );

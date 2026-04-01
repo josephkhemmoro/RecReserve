@@ -82,7 +82,7 @@ function RootLayoutInner() {
 
     return () => {
       if (notificationResponseListener.current) {
-        Notifications.removeNotificationSubscription(notificationResponseListener.current)
+        notificationResponseListener.current.remove()
       }
     }
   }, [router])
@@ -113,7 +113,7 @@ function RootLayoutInner() {
               user_id: session.user.id,
               club_id: profile.club_id,
               tier: 'premium',
-              start_date: new Date().toISOString().split('T')[0],
+              start_date: new Date().toLocaleDateString('en-CA'),
               is_active: true,
             })
 
@@ -162,7 +162,7 @@ function RootLayoutInner() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color="#0D9488" />
       </View>
     )
   }

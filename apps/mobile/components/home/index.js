@@ -1,4 +1,5 @@
-export { HomeHeader } from './HomeHeader'
-export { NextSessionCard } from './NextSessionCard'
-export { ActionRow } from './ActionRow'
+export { ClubHeader } from './ClubHeader'
+export { HeroCarousel } from './HeroCarousel'
 export { StreakStrip } from './StreakStrip'
+export { HomeTabs } from './HomeTabs'
+export { FloatingBookButton } from './FloatingBookButton'

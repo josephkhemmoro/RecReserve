@@ -1,5 +1,7 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
+import { colors, textStyles, spacing, borderRadius, shadows } from '../../theme'
+import { Card, Icon, Button } from '../ui'
 
 function formatSmartDate(dateStr) {
   const date = new Date(dateStr)
@@ -29,85 +31,79 @@ function getCountdown(startTime) {
   return 'Starting now'
 }
 
-export function NextSessionCard({ reservation, hasClub }) {
+export function NextSessionCard({ reservation, hasClub, isLoading }) {
   const router = useRouter()
+
+  if (isLoading) {
+    return (
+      <Card variant="default" style={styles.sessionCard}>
+        <View style={styles.accentBar} />
+        <View style={styles.sessionContent}>
+          <View style={styles.skeletonLine} />
+          <View style={[styles.skeletonLine, { width: '60%', height: 18, marginTop: spacing.xs }]} />
+          <View style={[styles.skeletonLine, { width: '80%', marginTop: spacing.sm }]} />
+        </View>
+      </Card>
+    )
+  }
 
   if (!hasClub) {
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push('/(tabs)/clubs')}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.emptyTitle}>Join a club to start booking! 🎾</Text>
-        <View style={styles.ctaBtn}>
-          <Text style={styles.ctaBtnText}>Find a Club</Text>
+      <Card variant="outlined" onPress={() => router.push('/(tabs)/clubs')}>
+        <View style={styles.emptyInner}>
+          <Icon name="tennisball-outline" size="lg" color={colors.neutral300} />
+          <Text style={styles.emptyTitle}>Join a club to start booking</Text>
+          <Button title="Find a Club" onPress={() => router.push('/(tabs)/clubs')} variant="primary" size="sm" />
         </View>
-      </TouchableOpacity>
+      </Card>
     )
   }
 
   if (!reservation) {
     return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push('/courts')}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.emptyTitle}>No upcoming sessions</Text>
-        <Text style={styles.emptySubtitle}>Ready to get on court?</Text>
-        <View style={styles.ctaBtn}>
-          <Text style={styles.ctaBtnText}>Book a Court</Text>
+      <Card variant="outlined" onPress={() => router.push('/courts')}>
+        <View style={styles.emptyInner}>
+          <Text style={styles.emptyTitle}>No upcoming sessions</Text>
+          <Text style={styles.emptySubtitle}>Ready to get on court?</Text>
+          <Button title="Book a Court" onPress={() => router.push('/courts')} variant="accent" size="md" icon="tennisball-outline" />
         </View>
-      </TouchableOpacity>
+      </Card>
     )
   }
 
   const countdown = getCountdown(reservation.start_time)
 
   return (
-    <TouchableOpacity
-      style={[styles.card, styles.cardWithAccent]}
-      onPress={() => router.push('/(tabs)/reservations')}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.label}>NEXT SESSION</Text>
-      <Text style={styles.courtName}>{reservation.court?.name || 'Court'}</Text>
-      <Text style={styles.dateTime}>
-        {formatSmartDate(reservation.start_time)} · {formatTime(reservation.start_time)} – {formatTime(reservation.end_time)}
-      </Text>
-      {countdown && <Text style={styles.countdown}>{countdown}</Text>}
-      <Text style={styles.viewLink}>View Details →</Text>
-    </TouchableOpacity>
+    <Card variant="elevated" onPress={() => router.push('/(tabs)/reservations')} style={styles.sessionCard}>
+      <View style={styles.accentBar} />
+      <View style={styles.sessionContent}>
+        <Text style={styles.label}>NEXT SESSION</Text>
+        <Text style={styles.courtName}>{reservation.court?.name || 'Court'}</Text>
+        <Text style={styles.dateTime}>
+          {formatSmartDate(reservation.start_time)} · {formatTime(reservation.start_time)} – {formatTime(reservation.end_time)}
+        </Text>
+        {countdown && (
+          <View style={styles.countdownRow}>
+            <Icon name="time-outline" size="sm" color={colors.primary} />
+            <Text style={styles.countdownText}>{countdown}</Text>
+          </View>
+        )}
+      </View>
+    </Card>
   )
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  cardWithAccent: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#2563eb',
-  },
-  label: {
-    fontSize: 10, fontWeight: '700', color: '#94a3b8',
-    letterSpacing: 1, marginBottom: 6,
-  },
-  courtName: { fontSize: 18, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  dateTime: { fontSize: 14, color: '#475569', marginBottom: 4 },
-  countdown: { fontSize: 13, fontWeight: '600', color: '#2563eb', marginBottom: 6 },
-  viewLink: { fontSize: 13, fontWeight: '600', color: '#2563eb', marginTop: 4 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b', marginBottom: 4 },
-  emptySubtitle: { fontSize: 14, color: '#94a3b8', marginBottom: 12 },
-  ctaBtn: {
-    backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 10,
-    alignItems: 'center', marginTop: 4,
-  },
-  ctaBtnText: { color: '#ffffff', fontSize: 15, fontWeight: '700' },
+  sessionCard: { flexDirection: 'row', overflow: 'hidden', padding: 0 },
+  accentBar: { width: 4, backgroundColor: colors.primary, borderTopLeftRadius: borderRadius.lg, borderBottomLeftRadius: borderRadius.lg },
+  sessionContent: { flex: 1, padding: spacing.base },
+  label: { ...textStyles.labelUpper, color: colors.neutral400, marginBottom: spacing.sm },
+  courtName: { ...textStyles.heading4, color: colors.neutral900, marginBottom: spacing.xs },
+  dateTime: { ...textStyles.bodySmall, color: colors.neutral600 },
+  countdownRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
+  countdownText: { ...textStyles.label, color: colors.primary },
+  emptyInner: { alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
+  emptyTitle: { ...textStyles.bodyMedium, color: colors.neutral700 },
+  emptySubtitle: { ...textStyles.bodySmall, color: colors.neutral400 },
+  skeletonLine: { height: 12, width: '40%', backgroundColor: colors.neutral100, borderRadius: borderRadius.sm },
 })

@@ -64,7 +64,7 @@ export function RevenueByCourtChart({ data, isLoading }: Props) {
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-6">
                     <div
-                      className="bg-blue-500 h-6 rounded-full transition-all duration-500"
+                      className="bg-brand h-6 rounded-full transition-all duration-500"
                       style={{ width: `${Math.max(widthPercent, 2)}%` }}
                     />
                   </div>

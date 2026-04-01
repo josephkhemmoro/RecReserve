@@ -4,7 +4,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   StyleSheet,
   ActivityIndicator,
   Alert,
@@ -24,6 +23,8 @@ import { useStreakStore } from '../../store/streakStore'
 import { useKudosStore } from '../../store/kudosStore'
 import { StreakBadge, StreakMilestones, StreakFreezeButton } from '../../components/streaks'
 import { KudosBadge, KudosReceivedList } from '../../components/kudos'
+import { Avatar, Icon } from '../../components/ui'
+import { colors, spacing, borderRadius, shadows } from '../../theme'
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -187,7 +188,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     )
   }
@@ -205,18 +206,10 @@ export default function ProfileScreen() {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={handleAvatarPick} style={styles.avatarContainer}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarText}>
-                  {fullName.charAt(0).toUpperCase() || 'U'}
-                </Text>
-              </View>
-            )}
+            <Avatar uri={avatarUrl} name={fullName || 'U'} size="lg" />
             {uploading && (
               <View style={styles.avatarOverlay}>
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color={colors.white} />
               </View>
             )}
             <View style={styles.editAvatarBadge}>
@@ -243,22 +236,22 @@ export default function ProfileScreen() {
             {tierLoading ? (
               <View style={styles.membershipCard}>
                 <View style={[styles.skeletonBar, { width: '50%', height: 14 }]} />
-                <View style={[styles.skeletonBar, { width: '70%', height: 12, marginTop: 8 }]} />
+                <View style={[styles.skeletonBar, { width: '70%', height: 12, marginTop: spacing.sm }]} />
               </View>
             ) : tier ? (
-              <View style={[styles.membershipCard, { borderLeftColor: tier.color || '#2563eb' }]}>
+              <View style={[styles.membershipCard, { borderLeftColor: tier.color || colors.primary }]}>
                 <View style={styles.membershipHeader}>
-                  <View style={[styles.tierDot, { backgroundColor: tier.color || '#2563eb' }]} />
+                  <View style={[styles.tierDot, { backgroundColor: tier.color || colors.primary }]} />
                   <Text style={styles.tierName}>{tier.name}</Text>
                 </View>
                 {tier.can_book_free ? (
                   <View style={styles.freeBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color="#15803d" />
+                    <Icon name="checkmark-circle" size="sm" color={colors.success} />
                     <Text style={styles.freeBadgeText}>Books free — no charge for court bookings</Text>
                   </View>
                 ) : tier.discount_percent > 0 ? (
                   <View style={styles.discountBadge}>
-                    <Ionicons name="pricetag" size={14} color="#2563eb" />
+                    <Icon name="pricetag" size="sm" color={colors.primary} />
                     <Text style={styles.discountBadgeText}>
                       {tier.discount_percent}% off court bookings
                     </Text>
@@ -274,7 +267,7 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <View style={styles.membershipCardMuted}>
-                <Ionicons name="information-circle-outline" size={18} color="#94a3b8" />
+                <Icon name="information-circle-outline" size="md" color={colors.neutral400} />
                 <Text style={styles.noTierText}>No membership tier — contact your club</Text>
               </View>
             )}
@@ -318,7 +311,7 @@ export default function ProfileScreen() {
                 value={fullName}
                 onChangeText={setFullName}
                 placeholder="Your name"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={colors.neutral400}
               />
             ) : (
               <Text style={styles.fieldValue}>{fullName || '—'}</Text>
@@ -338,7 +331,7 @@ export default function ProfileScreen() {
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Phone number"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={colors.neutral400}
                 keyboardType="phone-pad"
               />
             ) : (
@@ -390,45 +383,42 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 70 },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc' },
-  header: { alignItems: 'center', paddingBottom: 20 },
-  avatarContainer: { position: 'relative', marginBottom: 12 },
-  avatarImage: { width: 88, height: 88, borderRadius: 44 },
-  avatarFallback: { width: 88, height: 88, borderRadius: 44, backgroundColor: '#2563eb', alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 32, fontWeight: '700', color: '#ffffff' },
-  avatarOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 44, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
-  editAvatarBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#1e293b', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
-  editAvatarText: { color: '#ffffff', fontSize: 10, fontWeight: '700' },
-  clubBadge: { backgroundColor: '#eff6ff', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  clubBadgeText: { fontSize: 13, fontWeight: '600', color: '#2563eb' },
+  container: { flex: 1, backgroundColor: colors.white, paddingTop: 70 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white },
+  header: { alignItems: 'center', paddingBottom: spacing.lg },
+  avatarContainer: { position: 'relative', marginBottom: spacing.md },
+  avatarOverlay: { ...StyleSheet.absoluteFillObject, borderRadius: 32, backgroundColor: colors.overlayLight, alignItems: 'center', justifyContent: 'center' },
+  editAvatarBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.neutral900, borderRadius: borderRadius.md, paddingHorizontal: spacing.sm, paddingVertical: 3 },
+  editAvatarText: { color: colors.white, fontSize: 10, fontWeight: '700' },
+  clubBadge: { backgroundColor: colors.primaryMuted, paddingHorizontal: spacing.base, paddingVertical: spacing.sm, borderRadius: borderRadius.xl },
+  clubBadgeText: { fontSize: 13, fontWeight: '600', color: colors.primary },
 
   // Membership card
-  membershipSection: { paddingHorizontal: 24, paddingTop: 16 },
+  membershipSection: { paddingHorizontal: spacing.xl, paddingTop: spacing.base },
   membershipCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.neutral100,
     borderLeftWidth: 4,
-    borderLeftColor: '#2563eb',
+    borderLeftColor: colors.primary,
   },
   membershipCardMuted: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.base,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.neutral100,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   membershipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   tierDot: {
     width: 10,
@@ -438,96 +428,96 @@ const styles = StyleSheet.create({
   tierName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.neutral900,
     textTransform: 'capitalize',
   },
   tierSubtext: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: colors.neutral400,
     marginTop: 2,
   },
   freeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: spacing.sm,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
   },
   freeBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#15803d',
+    color: colors.success,
   },
   discountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    gap: spacing.sm,
+    backgroundColor: colors.primarySurface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.sm,
   },
   discountBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#2563eb',
+    color: colors.primary,
   },
   noTierText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: colors.neutral400,
     flex: 1,
   },
   skeletonBar: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 6,
+    backgroundColor: colors.neutral100,
+    borderRadius: borderRadius.sm,
   },
 
   streakBadgeRow: {
-    marginTop: 8,
+    marginTop: spacing.sm,
   },
   streakSection: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
   },
   streakSectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.neutral900,
     marginBottom: 14,
   },
   kudosSection: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
   },
   kudosSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   kudosSectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.neutral900,
   },
-  fields: { paddingHorizontal: 24, paddingTop: 16 },
-  fieldGroup: { marginBottom: 20 },
-  fieldLabel: { fontSize: 12, fontWeight: '600', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 6 },
-  fieldValue: { fontSize: 16, color: '#1e293b', fontWeight: '500' },
-  fieldValueMuted: { fontSize: 16, color: '#64748b' },
-  fieldInput: { fontSize: 16, color: '#1e293b', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, backgroundColor: '#ffffff' },
-  editActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  saveButton: { flex: 1, backgroundColor: '#2563eb', borderRadius: 12, padding: 14, alignItems: 'center' },
-  saveButtonText: { color: '#ffffff', fontSize: 15, fontWeight: '600' },
-  cancelEditButton: { flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, alignItems: 'center' },
-  cancelEditText: { color: '#64748b', fontSize: 15, fontWeight: '600' },
-  editButton: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 14, alignItems: 'center', backgroundColor: '#ffffff', marginTop: 4 },
-  editButtonText: { color: '#2563eb', fontSize: 15, fontWeight: '600' },
-  actions: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40, gap: 12 },
-  switchButton: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, alignItems: 'center', backgroundColor: '#ffffff' },
-  switchButtonText: { color: '#2563eb', fontSize: 16, fontWeight: '600' },
-  signOutButton: { borderWidth: 1, borderColor: '#fecaca', borderRadius: 12, padding: 16, alignItems: 'center', backgroundColor: '#fef2f2' },
-  signOutText: { color: '#dc2626', fontSize: 16, fontWeight: '600' },
+  fields: { paddingHorizontal: spacing.xl, paddingTop: spacing.base },
+  fieldGroup: { marginBottom: spacing.lg },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: colors.neutral400, textTransform: 'uppercase', marginBottom: spacing.sm },
+  fieldValue: { fontSize: 16, color: colors.neutral900, fontWeight: '500' },
+  fieldValueMuted: { fontSize: 16, color: colors.neutral500 },
+  fieldInput: { fontSize: 16, color: colors.neutral900, borderWidth: 1, borderColor: colors.neutral200, borderRadius: borderRadius.md, padding: spacing.md, backgroundColor: colors.white },
+  editActions: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.sm },
+  saveButton: { flex: 1, backgroundColor: colors.primary, borderRadius: borderRadius.lg, padding: 14, alignItems: 'center' },
+  saveButtonText: { color: colors.white, fontSize: 15, fontWeight: '600' },
+  cancelEditButton: { flex: 1, borderWidth: 1, borderColor: colors.neutral200, borderRadius: borderRadius.lg, padding: 14, alignItems: 'center' },
+  cancelEditText: { color: colors.neutral500, fontSize: 15, fontWeight: '600' },
+  editButton: { borderWidth: 1, borderColor: colors.neutral200, borderRadius: borderRadius.lg, padding: 14, alignItems: 'center', backgroundColor: colors.white, marginTop: spacing.xs },
+  editButtonText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+  actions: { paddingHorizontal: spacing.xl, paddingTop: spacing['2xl'], paddingBottom: spacing['3xl'], gap: spacing.md },
+  switchButton: { borderWidth: 1, borderColor: colors.neutral200, borderRadius: borderRadius.lg, padding: spacing.base, alignItems: 'center', backgroundColor: colors.white },
+  switchButtonText: { color: colors.primary, fontSize: 16, fontWeight: '600' },
+  signOutButton: { borderWidth: 1, borderColor: colors.errorLight, borderRadius: borderRadius.lg, padding: spacing.base, alignItems: 'center', backgroundColor: colors.errorLight },
+  signOutText: { color: colors.error, fontSize: 16, fontWeight: '600' },
 })

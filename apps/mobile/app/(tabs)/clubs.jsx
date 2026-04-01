@@ -8,7 +8,6 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
@@ -17,6 +16,8 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
+import { Avatar } from '../../components/ui'
+import { colors, spacing, borderRadius, shadows } from '../../theme'
 
 export default function ClubsScreen() {
   const router = useRouter()
@@ -86,7 +87,7 @@ export default function ClubsScreen() {
         user_id: user?.id,
         club_id: club.id,
         tier: 'standard',
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: new Date().toLocaleDateString('en-CA'),
         is_active: true,
       })
 
@@ -155,7 +156,7 @@ export default function ClubsScreen() {
         keyExtractor={(item) => item.id}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{ paddingBottom: spacing['3xl'] }}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -175,15 +176,9 @@ export default function ClubsScreen() {
                       style={styles.clubCardMain}
                       onPress={() => handleSelect(m)}
                     >
-                      {m.club?.logo_url ? (
-                        <Image source={{ uri: m.club.logo_url }} style={styles.clubLogoImage} />
-                      ) : (
-                        <View style={styles.clubAvatar}>
-                          <Text style={styles.clubAvatarText}>
-                            {m.club?.name?.charAt(0) || 'C'}
-                          </Text>
-                        </View>
-                      )}
+                      <View style={styles.clubAvatarWrap}>
+                        <Avatar uri={m.club?.logo_url} name={m.club?.name || 'C'} size="md" />
+                      </View>
                       <TouchableOpacity
                         style={styles.clubInfo}
                         onPress={() => router.push(`/club/${m.club_id}`)}
@@ -233,7 +228,7 @@ export default function ClubsScreen() {
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search by club name..."
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.neutral400}
                   value={search}
                   onChangeText={setSearch}
                   onSubmitEditing={handleSearch}
@@ -245,7 +240,7 @@ export default function ClubsScreen() {
                   disabled={searching || !search.trim()}
                 >
                   {searching ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={colors.white} />
                   ) : (
                     <Text style={styles.searchButtonText}>Search</Text>
                   )}
@@ -265,15 +260,9 @@ export default function ClubsScreen() {
           const alreadyMember = isMember(item.id)
           return (
             <View style={styles.resultCard}>
-              {item.logo_url ? (
-                <Image source={{ uri: item.logo_url }} style={styles.clubLogoImage} />
-              ) : (
-                <View style={styles.clubAvatar}>
-                  <Text style={styles.clubAvatarText}>
-                    {item.name.charAt(0)}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.clubAvatarWrap}>
+                <Avatar uri={item.logo_url} name={item.name} size="md" />
+              </View>
               <TouchableOpacity
                 style={styles.clubInfo}
                 onPress={() => router.push(`/club/${item.id}`)}
@@ -294,7 +283,7 @@ export default function ClubsScreen() {
                   disabled={joining === item.id}
                 >
                   {joining === item.id ? (
-                    <ActivityIndicator size="small" color="#ffffff" />
+                    <ActivityIndicator size="small" color={colors.white} />
                   ) : (
                     <Text style={styles.joinButtonText}>Join</Text>
                   )}
@@ -311,60 +300,43 @@ export default function ClubsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.white,
     paddingTop: 70,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.neutral900,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 10,
+    color: colors.neutral900,
+    marginBottom: spacing.md,
   },
   clubCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    marginBottom: 8,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.neutral200,
     overflow: 'hidden',
+    ...shadows.sm,
   },
   clubCardMain: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
   },
-  clubAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#2563eb',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  clubLogoImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    marginRight: 12,
-    backgroundColor: '#f1f5f9',
-  },
-  clubAvatarText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#ffffff',
+  clubAvatarWrap: {
+    marginRight: spacing.md,
   },
   clubInfo: {
     flex: 1,
@@ -372,123 +344,124 @@ const styles = StyleSheet.create({
   clubName: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: colors.neutral900,
   },
   clubLocation: {
     fontSize: 13,
-    color: '#64748b',
+    color: colors.neutral500,
     marginTop: 2,
   },
   activeBadge: {
-    backgroundColor: '#dcfce7',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   activeBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#16a34a',
+    color: colors.success,
   },
   selectBadge: {
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: colors.primarySurface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   selectBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#2563eb',
+    color: colors.primary,
   },
   leaveButton: {
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingVertical: 8,
+    borderTopColor: colors.neutral100,
+    paddingVertical: spacing.sm,
     alignItems: 'center',
   },
   leaveButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#dc2626',
+    color: colors.error,
   },
   memberBadge: {
-    backgroundColor: '#f0fdf4',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    backgroundColor: colors.successLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
   },
   memberBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#16a34a',
+    color: colors.success,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 32,
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    paddingVertical: spacing['2xl'],
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
-    marginBottom: 20,
+    borderColor: colors.neutral100,
+    marginBottom: spacing.lg,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 4,
+    color: colors.neutral900,
+    marginBottom: spacing.xs,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: colors.neutral400,
     textAlign: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing['2xl'],
   },
   searchRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.sm,
   },
   searchInput: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.white,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
+    borderColor: colors.neutral200,
+    borderRadius: borderRadius.lg,
     padding: 14,
     fontSize: 15,
-    color: '#1e293b',
+    color: colors.neutral900,
   },
   searchButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    paddingHorizontal: 20,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     minWidth: 80,
     alignItems: 'center',
   },
   searchButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 15,
     fontWeight: '600',
   },
   resultsList: {
-    marginTop: 12,
+    marginTop: spacing.md,
   },
   resultCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
     padding: 14,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.neutral100,
+    ...shadows.sm,
   },
   joinButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.md,
     paddingHorizontal: 18,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
     minWidth: 60,
     alignItems: 'center',
   },
@@ -496,16 +469,16 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   joinButtonText: {
-    color: '#ffffff',
+    color: colors.white,
     fontSize: 14,
     fontWeight: '600',
   },
   emptySearch: {
-    paddingVertical: 24,
+    paddingVertical: spacing.xl,
     alignItems: 'center',
   },
   emptySearchText: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: colors.neutral400,
   },
 })

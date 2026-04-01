@@ -74,7 +74,7 @@ export default function StripeReturnPage() {
   if (status === "loading" || adminLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-blue-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-brand" />
       </div>
     );
   }
@@ -94,7 +94,7 @@ export default function StripeReturnPage() {
           </p>
           <button
             onClick={() => router.push("/")}
-            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-6 py-3 bg-brand text-white font-medium rounded-lg hover:bg-brand-dark transition-colors"
           >
             Go to Dashboard
           </button>
@@ -118,7 +118,7 @@ export default function StripeReturnPage() {
           </p>
           <button
             onClick={handleRetryOnboarding}
-            className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-6 py-3 bg-brand text-white font-medium rounded-lg hover:bg-brand-dark transition-colors"
           >
             Continue Stripe Setup
           </button>
@@ -148,7 +148,7 @@ export default function StripeReturnPage() {
         </p>
         <button
           onClick={handleRetryOnboarding}
-          className="px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-6 py-3 bg-brand text-white font-medium rounded-lg hover:bg-brand-dark transition-colors"
         >
           Retry Stripe Setup
         </button>

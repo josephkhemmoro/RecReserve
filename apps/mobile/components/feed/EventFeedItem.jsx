@@ -1,12 +1,14 @@
-import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native'
+import { View, Text, Alert, StyleSheet } from 'react-native'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { Icon, Button, Badge } from '../ui'
 
 const EVENT_ICONS = {
-  tournament: '🏆',
-  open_play: '🎾',
-  clinic: '📚',
-  lesson: '🎓',
+  tournament: 'trophy-outline',
+  open_play: 'tennisball-outline',
+  clinic: 'school-outline',
+  lesson: 'book-outline',
 }
 
 function formatEventDate(startTime, endTime) {
@@ -29,7 +31,7 @@ function formatEventDate(startTime, endTime) {
 
 export function EventFeedItem({ event }) {
   const { user } = useAuthStore()
-  const icon = EVENT_ICONS[event.event_type] || '📅'
+  const iconName = EVENT_ICONS[event.event_type] || 'calendar-outline'
   const priceText = event.price > 0 ? `$${event.price}` : 'Free'
   const spotsText = event.max_participants
     ? `${event.registered_count || 0}/${event.max_participants} spots`
@@ -39,55 +41,37 @@ export function EventFeedItem({ event }) {
     if (!user?.id) return
     try {
       const { error } = await supabase.from('event_registrations').insert({
-        event_id: event.id,
-        user_id: user.id,
-        status: 'registered',
+        event_id: event.id, user_id: user.id, status: 'registered',
       })
       if (error) {
         if (error.code === '23505') Alert.alert('Already Registered')
         else throw error
-      } else {
-        Alert.alert('Registered!', 'You have been registered for this event.')
-      }
-    } catch (err) {
-      Alert.alert('Error', 'Failed to register.')
-    }
+      } else Alert.alert('Registered!', 'You have been registered for this event.')
+    } catch { Alert.alert('Error', 'Failed to register.') }
   }
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>📅 UPCOMING EVENT</Text>
-      <Text style={styles.title}>{icon} {event.title}</Text>
-      <Text style={styles.dateText}>
-        {formatEventDate(event.start_time, event.end_time)}
-      </Text>
+      <Badge label="UPCOMING EVENT" variant="success" icon="calendar-outline" size="sm" />
+      <View style={styles.titleRow}>
+        <Icon name={iconName} size="md" color={colors.success} />
+        <Text style={styles.title}>{event.title}</Text>
+      </View>
+      <Text style={styles.dateText}>{formatEventDate(event.start_time, event.end_time)}</Text>
       <Text style={styles.meta}>{spotsText} · {priceText}</Text>
-      <TouchableOpacity style={styles.registerBtn} onPress={handleRegister}>
-        <Text style={styles.registerText}>Register</Text>
-      </TouchableOpacity>
+      <Button title="Register" onPress={handleRegister} variant="primary" size="sm" fullWidth />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
+    backgroundColor: colors.successLight, borderRadius: borderRadius.lg,
+    padding: spacing.base, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: '#BBF7D0', gap: spacing.sm,
   },
-  label: {
-    fontSize: 10, fontWeight: '700', color: '#15803d',
-    letterSpacing: 0.5, marginBottom: 6,
-  },
-  title: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 4 },
-  dateText: { fontSize: 13, color: '#475569', marginBottom: 2 },
-  meta: { fontSize: 12, color: '#94a3b8', marginBottom: 8 },
-  registerBtn: {
-    backgroundColor: '#16a34a', borderRadius: 8,
-    paddingVertical: 8, alignItems: 'center',
-  },
-  registerText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  title: { ...textStyles.bodyMedium, color: colors.neutral900, flex: 1 },
+  dateText: { ...textStyles.bodySmall, color: colors.neutral600 },
+  meta: { ...textStyles.caption, color: colors.neutral500 },
 })

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import { getDemandLevel } from './demandHelpers'
+import { localDayStart, localDayEnd } from './dateUtils'
 
 const SLOT_INCREMENT = 30
 
@@ -39,8 +40,8 @@ export function useSlotDemand(clubId, date) {
             .select('court_id, start_time, end_time')
             .eq('club_id', clubId)
             .eq('status', 'confirmed')
-            .gte('start_time', `${date}T00:00:00`)
-            .lte('start_time', `${date}T23:59:59`),
+            .gte('start_time', localDayStart(new Date(date + 'T00:00:00')))
+            .lte('start_time', localDayEnd(new Date(date + 'T00:00:00'))),
         ])
 
         const courtIds = (courtsRes.data || []).map((c) => c.id)

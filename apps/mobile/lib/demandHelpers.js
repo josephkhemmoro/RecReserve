@@ -1,6 +1,5 @@
-/**
- * Calculate demand level based on booked vs total courts.
- */
+import { colors } from '../theme'
+
 export function getDemandLevel(booked, total) {
   if (total === 0) return 'open'
   const ratio = booked / total
@@ -10,29 +9,20 @@ export function getDemandLevel(booked, total) {
   return 'almost_full'
 }
 
-/**
- * Colors for each demand level.
- */
 export const DEMAND_COLORS = {
-  open: '#4CAF50',
-  filling: '#8BC34A',
-  busy: '#FF9800',
-  almost_full: '#F44336',
+  open: colors.demandOpen,
+  filling: colors.demandFilling,
+  busy: colors.demandBusy,
+  almost_full: colors.demandFull,
 }
 
-/**
- * Background colors (subtle, for slot cell backgrounds).
- */
 export const DEMAND_BG_COLORS = {
-  open: 'rgba(76, 175, 80, 0.08)',
-  filling: 'rgba(139, 195, 58, 0.10)',
-  busy: 'rgba(255, 152, 0, 0.10)',
-  almost_full: 'rgba(244, 67, 54, 0.10)',
+  open: `${colors.demandOpen}14`,
+  filling: `${colors.demandFilling}1A`,
+  busy: `${colors.demandBusy}1A`,
+  almost_full: `${colors.demandFull}1A`,
 }
 
-/**
- * Labels for the demand level.
- */
 export const DEMAND_LABELS = {
   open: 'Wide open',
   filling: 'Filling up',

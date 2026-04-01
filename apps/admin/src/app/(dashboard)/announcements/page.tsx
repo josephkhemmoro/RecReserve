@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { PageHeader, Card, Button, Badge, FormInput, FormTextarea, FormSelect, Skeleton } from "@/components/ui";
 
 interface Tier {
   id: string;
@@ -345,16 +346,16 @@ export default function AnnouncementsPage() {
   if (isLoading) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-8">Announcements</h1>
+        <PageHeader title="Announcements" subtitle="Send push and in-app notifications to your members" />
         <div className="max-w-3xl space-y-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-6 animate-pulse">
-            <div className="h-5 w-40 bg-slate-200 rounded mb-4" />
+          <Card>
             <div className="space-y-3">
-              <div className="h-10 bg-slate-100 rounded-lg" />
-              <div className="h-24 bg-slate-100 rounded-lg" />
-              <div className="h-10 bg-slate-100 rounded-lg" />
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-10 w-full" />
             </div>
-          </div>
+          </Card>
         </div>
       </div>
     );
@@ -362,70 +363,37 @@ export default function AnnouncementsPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-slate-900">Announcements</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Send push and in-app notifications to your members
-        </p>
-      </div>
+      <PageHeader
+        title="Announcements"
+        subtitle="Send push and in-app notifications to your members"
+      />
 
       <div className="max-w-3xl space-y-8">
         {/* Compose Form */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">
-            Compose Announcement
-          </h2>
-
+        <Card title="Compose Announcement">
           <div className="space-y-4">
             {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Title *
-              </label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) =>
-                  setForm({ ...form, title: e.target.value.slice(0, 100) })
-                }
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. Court Maintenance Notice"
-                maxLength={100}
-              />
-              <p className="text-xs text-slate-400 mt-1 text-right">
-                {form.title.length}/100
-              </p>
-            </div>
+            <FormInput
+              label="Title *"
+              value={form.title}
+              onChange={(v) => setForm({ ...form, title: v.slice(0, 100) })}
+              placeholder="e.g. Court Maintenance Notice"
+              helperText={`${form.title.length}/100`}
+            />
 
             {/* Message */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
-                Message *
-              </label>
-              <textarea
-                value={form.message}
-                onChange={(e) =>
-                  setForm({ ...form, message: e.target.value.slice(0, 500) })
-                }
-                rows={4}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Write your announcement message..."
-                maxLength={500}
-              />
-              <p
-                className={`text-xs mt-1 text-right ${
-                  form.message.length > 480
-                    ? "text-amber-600"
-                    : "text-slate-400"
-                }`}
-              >
-                {form.message.length}/500
-              </p>
-            </div>
+            <FormTextarea
+              label="Message *"
+              value={form.message}
+              onChange={(v) => setForm({ ...form, message: v })}
+              rows={4}
+              placeholder="Write your announcement message..."
+              maxLength={500}
+            />
 
             {/* Image Attachment */}
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
                 Image
                 <span className="text-xs font-normal text-slate-400 ml-1">
                   (optional — flyer, promo graphic, etc.)
@@ -461,7 +429,7 @@ export default function AnnouncementsPage() {
                       setImagePreview(null);
                       if (imageInputRef.current) imageInputRef.current.value = "";
                     }}
-                    className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full text-xs font-bold flex items-center justify-center hover:bg-red-600"
+                    className="absolute -top-2 -right-2 w-6 h-6 bg-error text-white rounded-full text-xs font-bold flex items-center justify-center hover:bg-red-600 cursor-pointer"
                   >
                     ✕
                   </button>
@@ -469,9 +437,9 @@ export default function AnnouncementsPage() {
               ) : (
                 <button
                   onClick={() => imageInputRef.current?.click()}
-                  className="px-4 py-2.5 rounded-lg border-2 border-dashed border-slate-300 text-sm text-slate-500 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                  className="px-4 py-2.5 rounded-lg border-2 border-dashed border-slate-300 text-sm text-slate-500 hover:border-brand hover:text-brand transition-colors cursor-pointer"
                 >
-                  📎 Attach Image
+                  Attach Image
                 </button>
               )}
             </div>
@@ -490,7 +458,7 @@ export default function AnnouncementsPage() {
                     onChange={() =>
                       setForm({ ...form, audience: "all", tier_id: "" })
                     }
-                    className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-slate-300 focus:ring-brand"
                   />
                   <span className="text-sm text-slate-700">All members</span>
                 </label>
@@ -500,25 +468,21 @@ export default function AnnouncementsPage() {
                     name="audience"
                     checked={form.audience === "tier"}
                     onChange={() => setForm({ ...form, audience: "tier" })}
-                    className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-slate-300 focus:ring-brand"
                   />
                   <span className="text-sm text-slate-700">Specific tier</span>
                 </label>
                 {form.audience === "tier" && (
-                  <select
+                  <FormSelect
+                    label=""
                     value={form.tier_id}
-                    onChange={(e) =>
-                      setForm({ ...form, tier_id: e.target.value })
-                    }
-                    className="ml-6 w-64 px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select a tier...</option>
-                    {tiers.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm({ ...form, tier_id: v })}
+                    options={[
+                      { value: "", label: "Select a tier..." },
+                      ...tiers.map((t) => ({ value: t.id, label: t.name })),
+                    ]}
+                    className="ml-6 w-64"
+                  />
                 )}
               </div>
             </div>
@@ -539,7 +503,7 @@ export default function AnnouncementsPage() {
                     onChange={(e) =>
                       setForm({ ...form, send_push: e.target.checked })
                     }
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-slate-300 rounded focus:ring-brand"
                   />
                   <span className="text-sm text-slate-700">
                     Push notification
@@ -555,7 +519,7 @@ export default function AnnouncementsPage() {
                     onChange={(e) =>
                       setForm({ ...form, send_in_app: e.target.checked })
                     }
-                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-brand border-slate-300 rounded focus:ring-brand"
                   />
                   <span className="text-sm text-slate-700">
                     In-app notification
@@ -570,14 +534,14 @@ export default function AnnouncementsPage() {
 
           {/* Error */}
           {sendError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mt-4 text-sm">
+            <div className="bg-error-light border border-red-200 text-error px-4 py-3 rounded-lg mt-4 text-sm">
               {sendError}
             </div>
           )}
 
           {/* Success */}
           {sendResult && (
-            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mt-4 text-sm">
+            <div className="bg-success-light border border-green-200 text-success px-4 py-3 rounded-lg mt-4 text-sm">
               <p className="font-medium">Announcement sent!</p>
               <p className="mt-0.5">
                 {sendResult.recipients} recipient
@@ -592,31 +556,23 @@ export default function AnnouncementsPage() {
 
           {/* Send Button */}
           <div className="mt-5">
-            <button
+            <Button
               onClick={handleSend}
               disabled={!canSend || sending}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              loading={sending}
+              size="lg"
             >
-              {sending && (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              )}
               {sending ? "Sending..." : "Send Announcement"}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
 
         {/* History */}
-        <div className="bg-white rounded-xl border border-slate-200">
-          <div className="px-6 py-4 border-b border-slate-200">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Past Announcements
-            </h2>
-          </div>
-
+        <Card title="Past Announcements" noPadding>
           {historyLoading ? (
-            <div className="p-6 space-y-3 animate-pulse">
+            <div className="p-6 space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-16 bg-slate-100 rounded-lg" />
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
           ) : history.length === 0 ? (
@@ -667,32 +623,38 @@ export default function AnnouncementsPage() {
                       <p className="text-xs text-slate-400">
                         {formatTimestamp(item.sent_at)}
                       </p>
-                      <p className="text-xs text-slate-500 capitalize">
-                        {item.audience === "all" ? "All members" : "Specific tier"}
-                      </p>
+                      <Badge
+                        label={item.audience === "all" ? "All members" : "Specific tier"}
+                        variant={item.audience === "all" ? "brand" : "warning"}
+                      />
                       {confirmDeleteKey === item.id ? (
                         <div className="flex items-center gap-2 mt-1">
-                          <button
+                          <Button
+                            variant="danger"
+                            size="sm"
                             onClick={() => handleDeleteAnnouncement(item)}
                             disabled={deletingKey === item.id}
-                            className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                            loading={deletingKey === item.id}
                           >
                             {deletingKey === item.id ? "Deleting..." : "Confirm"}
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setConfirmDeleteKey(null)}
-                            className="text-xs font-medium text-slate-400 hover:text-slate-600"
                           >
                             Cancel
-                          </button>
+                          </Button>
                         </div>
                       ) : (
-                        <button
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => setConfirmDeleteKey(item.id)}
-                          className="text-xs font-medium text-red-500 hover:text-red-700 mt-1"
+                          className="mt-1"
                         >
                           Delete
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -700,7 +662,7 @@ export default function AnnouncementsPage() {
               ))}
             </div>
           )}
-        </div>
+        </Card>
       </div>
     </div>
   );

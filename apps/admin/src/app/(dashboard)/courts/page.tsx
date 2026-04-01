@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { PageHeader, Card, FormInput, Button, Badge, EmptyState, Skeleton } from "@/components/ui";
 import type { DayOfWeek } from "@recreserve/shared";
 
 interface Court {
@@ -108,59 +109,52 @@ export default function CourtsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Courts</h1>
-        <button
-          onClick={() => {
-            setShowAddForm(true);
-            setAddForm(EMPTY_FORM);
-            setAddFormError("");
-          }}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Add Court
-        </button>
-      </div>
+      <PageHeader
+        title="Courts"
+        action={
+          <Button
+            onClick={() => {
+              setShowAddForm(true);
+              setAddForm(EMPTY_FORM);
+              setAddFormError("");
+            }}
+          >
+            Add Court
+          </Button>
+        }
+      />
 
       {/* Add Court Form */}
       {showAddForm && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">New Court</h2>
+        <Card title="New Court" className="mb-6">
           {addFormError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+            <div className="bg-error-light border border-red-200 text-error px-4 py-3 rounded-lg mb-4 text-sm">
               {addFormError}
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-              <input
-                type="text"
-                value={addForm.name}
-                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Court 1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Rate ($)</label>
-              <input
-                type="number"
-                min={0}
-                step={0.01}
-                value={addForm.is_free ? "" : addForm.hourly_rate}
-                onChange={(e) => setAddForm({ ...addForm, hourly_rate: Math.max(0, Number(e.target.value)) })}
-                disabled={addForm.is_free}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
-                placeholder="0.00"
-              />
-            </div>
+            <FormInput
+              label="Name"
+              value={addForm.name}
+              onChange={(v) => setAddForm({ ...addForm, name: v })}
+              placeholder="Court 1"
+            />
+            <FormInput
+              label="Hourly Rate ($)"
+              type="number"
+              min={0}
+              step={0.01}
+              value={addForm.is_free ? "" : addForm.hourly_rate}
+              onChange={(v) => setAddForm({ ...addForm, hourly_rate: Math.max(0, Number(v)) })}
+              disabled={addForm.is_free}
+              placeholder="0.00"
+            />
             <div className="flex items-end">
               <label className="flex items-center gap-3 cursor-pointer py-2">
                 <button
                   type="button"
                   onClick={() => setAddForm({ ...addForm, is_free: !addForm.is_free })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${addForm.is_free ? "bg-green-600" : "bg-slate-300"}`}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${addForm.is_free ? "bg-brand" : "bg-slate-300"}`}
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${addForm.is_free ? "translate-x-5" : "translate-x-0"}`} />
                 </button>
@@ -169,32 +163,37 @@ export default function CourtsPage() {
             </div>
           </div>
           <div className="flex gap-3 mt-4">
-            <button
+            <Button
               onClick={handleAddCourt}
               disabled={addSaving || !addForm.name.trim()}
-              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              loading={addSaving}
             >
               {addSaving ? "Creating..." : "Create"}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => { setShowAddForm(false); setAddFormError(""); }}
-              className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50"
             >
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Courts List */}
       {isLoading ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-3 animate-pulse">
-          {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-slate-100 rounded" />)}
-        </div>
+        <Card>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10" />)}
+          </div>
+        </Card>
       ) : courts.length === 0 ? (
-        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center text-slate-500">
-          No courts yet. Add your first court above.
-        </div>
+        <Card>
+          <EmptyState
+            title="No courts yet"
+            description="Add your first court to get started."
+          />
+        </Card>
       ) : (
         <div className="space-y-4">
           {courts.map((court) => (
@@ -329,7 +328,7 @@ function CourtCard({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="bg-card rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
       {/* Summary Row */}
       <div
         className={`px-6 py-4 flex items-center cursor-pointer hover:bg-slate-50/50 transition-colors ${isEditing ? "border-b border-slate-200" : ""}`}
@@ -338,13 +337,14 @@ function CourtCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-slate-900 truncate">{court.name}</span>
-            <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-semibold ${court.is_active ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>
-              {court.is_active ? "Active" : "Inactive"}
-            </span>
+            <Badge
+              label={court.is_active ? "Active" : "Inactive"}
+              variant={court.is_active ? "success" : "default"}
+            />
           </div>
           <div className="flex items-center gap-3 mt-1">
             {court.is_free ? (
-              <span className="text-xs font-medium text-green-600">Free</span>
+              <span className="text-xs font-medium text-success">Free</span>
             ) : (
               <span className="text-xs text-slate-500">${court.hourly_rate.toFixed(2)}/hr</span>
             )}
@@ -369,40 +369,33 @@ function CourtCard({
             <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wide mb-4">Court Details</h3>
 
             {formError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">
+              <div className="bg-error-light border border-red-200 text-error px-4 py-3 rounded-lg mb-4 text-sm">
                 {formError}
               </div>
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Hourly Rate ($)</label>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={form.is_free ? "" : form.hourly_rate}
-                  onChange={(e) => setForm({ ...form, hourly_rate: Math.max(0, Number(e.target.value)) })}
-                  disabled={form.is_free}
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400"
-                  placeholder="0.00"
-                />
-              </div>
+              <FormInput
+                label="Name"
+                value={form.name}
+                onChange={(v) => setForm({ ...form, name: v })}
+              />
+              <FormInput
+                label="Hourly Rate ($)"
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.is_free ? "" : form.hourly_rate}
+                onChange={(v) => setForm({ ...form, hourly_rate: Math.max(0, Number(v)) })}
+                disabled={form.is_free}
+                placeholder="0.00"
+              />
               <div className="flex items-end">
                 <label className="flex items-center gap-3 cursor-pointer py-2">
                   <button
                     type="button"
                     onClick={() => setForm({ ...form, is_free: !form.is_free })}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${form.is_free ? "bg-green-600" : "bg-slate-300"}`}
+                    className={`relative w-11 h-6 rounded-full transition-colors ${form.is_free ? "bg-brand" : "bg-slate-300"}`}
                   >
                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form.is_free ? "translate-x-5" : "translate-x-0"}`} />
                   </button>
@@ -412,23 +405,24 @@ function CourtCard({
             </div>
 
             <div className="flex items-center gap-3 mt-4">
-              <button
+              <Button
                 onClick={handleSave}
                 disabled={saving || !form.name.trim()}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                loading={saving}
               >
                 {saving ? "Saving..." : "Save Changes"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={handleToggleActive}
-                className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                className={
                   court.is_active
-                    ? "text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100"
-                    : "text-green-700 border-green-300 bg-green-50 hover:bg-green-100"
-                }`}
+                    ? "!text-warning !border-warning/30 !bg-warning-light hover:!bg-warning-light/80"
+                    : "!text-success !border-success/30 !bg-success-light hover:!bg-success-light/80"
+                }
               >
                 {court.is_active ? "Deactivate" : "Activate"}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -444,32 +438,33 @@ function CourtCard({
 
           {/* Danger Zone */}
           <div className="px-6 py-5">
-            <h3 className="text-sm font-semibold text-red-600 uppercase tracking-wide mb-3">Danger Zone</h3>
+            <h3 className="text-sm font-semibold text-error uppercase tracking-wide mb-3">Danger Zone</h3>
             {!showDeleteConfirm ? (
-              <button
+              <Button
+                variant="danger"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
               >
                 Delete Court
-              </button>
+              </Button>
             ) : (
-              <div className="flex items-center gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
-                <p className="text-sm text-red-700 flex-1">
+              <div className="flex items-center gap-3 p-4 bg-error-light rounded-lg border border-red-200">
+                <p className="text-sm text-error flex-1">
                   Permanently delete <strong>{court.name}</strong>? This will also remove all availability and reservations for this court. This cannot be undone.
                 </p>
-                <button
+                <Button
+                  variant="danger"
                   onClick={handleDelete}
-                  disabled={deleting}
-                  className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  loading={deleting}
+                  className="!bg-red-600 !text-white hover:!bg-red-700 whitespace-nowrap"
                 >
                   {deleting ? "Deleting..." : "Yes, Delete"}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 border border-slate-300 rounded-lg hover:bg-white transition-colors"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -615,9 +610,9 @@ function AvailabilityPanel({
 
   if (loading) {
     return (
-      <div className="px-6 py-5 animate-pulse">
-        <div className="h-5 w-32 bg-slate-100 rounded mb-4" />
-        {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-slate-50 rounded mb-2" />)}
+      <div className="px-6 py-5">
+        <Skeleton className="h-5 w-32 mb-4" />
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 mb-2" />)}
       </div>
     );
   }
@@ -631,14 +626,14 @@ function AvailabilityPanel({
           <p className="text-xs text-slate-500 mt-0.5">Set when this court is open for booking</p>
         </div>
         {toast && (
-          <span className={`text-xs font-medium px-3 py-1 rounded-lg ${toast.includes("Error") ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+          <span className={`text-xs font-medium px-3 py-1 rounded-lg ${toast.includes("Error") ? "bg-error-light text-error" : "bg-success-light text-success"}`}>
             {toast}
           </span>
         )}
       </div>
 
       {/* Quick Apply */}
-      <div className="px-6 py-3 bg-slate-50 border-y border-slate-100">
+      <div className="px-6 py-3 bg-brand-surface border-y border-slate-100">
         <p className="text-xs font-medium text-slate-500 uppercase mb-3">Quick Apply</p>
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2">
@@ -646,32 +641,32 @@ function AvailabilityPanel({
               type="time"
               value={defaultOpen}
               onChange={(e) => { setDefaultOpen(e.target.value); setQuickApplyError(""); }}
-              className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
             />
             <span className="text-slate-400 text-sm">to</span>
             <input
               type="time"
               value={defaultClose}
               onChange={(e) => { setDefaultClose(e.target.value); setQuickApplyError(""); }}
-              className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
             />
           </div>
-          <button
+          <Button
             onClick={handleApplyToAll}
             disabled={applyingAll}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            loading={applyingAll}
           >
             {applyingAll ? "Applying..." : "All Days"}
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
             onClick={handleApplyWeekdays}
             disabled={applyingAll}
-            className="px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
             Weekdays Only
-          </button>
+          </Button>
         </div>
-        {quickApplyError && <p className="text-xs text-red-600 mt-2">{quickApplyError}</p>}
+        {quickApplyError && <p className="text-xs text-error mt-2">{quickApplyError}</p>}
       </div>
 
       {/* Day Grid */}
@@ -766,7 +761,7 @@ function DayRowEditor({
       <div className="flex items-center gap-4">
         <button
           onClick={handleToggle}
-          className={`relative w-10 h-6 rounded-full transition-colors ${enabled ? "bg-blue-600" : "bg-slate-300"}`}
+          className={`relative w-10 h-6 rounded-full transition-colors ${enabled ? "bg-brand" : "bg-slate-300"}`}
         >
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${enabled ? "translate-x-4" : "translate-x-0"}`} />
         </button>
@@ -781,26 +776,27 @@ function DayRowEditor({
               type="time"
               value={open}
               onChange={(e) => handleTimeChange("open", e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
             />
             <span className="text-slate-400 text-sm">–</span>
             <input
               type="time"
               value={close}
               onChange={(e) => handleTimeChange("close", e.target.value)}
-              className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
             />
             {dirty && (
-              <button
+              <Button
+                size="sm"
                 onClick={handleSave}
                 disabled={saving}
-                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                loading={saving}
               >
                 {saving ? "..." : "Save"}
-              </button>
+              </Button>
             )}
             {existing && !dirty && (
-              <span className="text-xs text-green-600 font-medium">Saved</span>
+              <span className="text-xs text-success font-medium">Saved</span>
             )}
           </>
         ) : (
@@ -808,7 +804,7 @@ function DayRowEditor({
         )}
       </div>
       {timeError && (
-        <p className="text-xs text-red-600 mt-1.5 ml-[4.75rem]">{timeError}</p>
+        <p className="text-xs text-error mt-1.5 ml-[4.75rem]">{timeError}</p>
       )}
     </div>
   );

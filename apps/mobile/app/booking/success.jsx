@@ -8,6 +8,7 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 
 export default function BookingSuccessScreen() {
   const router = useRouter()
@@ -55,7 +56,7 @@ export default function BookingSuccessScreen() {
           ]}
         >
           <Animated.View style={{ transform: [{ scale: checkScale }] }}>
-            <Ionicons name="checkmark" size={48} color="#15803d" />
+            <Ionicons name="checkmark" size={48} color={colors.success} />
           </Animated.View>
         </Animated.View>
 
@@ -74,7 +75,7 @@ export default function BookingSuccessScreen() {
           style={styles.primaryButton}
           onPress={() => router.replace('/(tabs)/reservations')}
         >
-          <Ionicons name="calendar" size={18} color="#ffffff" />
+          <Ionicons name="calendar" size={18} color={colors.white} />
           <Text style={styles.primaryButtonText}>View My Reservations</Text>
         </TouchableOpacity>
 
@@ -82,7 +83,7 @@ export default function BookingSuccessScreen() {
           style={styles.secondaryButton}
           onPress={() => router.replace('/(tabs)')}
         >
-          <Ionicons name="tennisball-outline" size={18} color="#2563eb" />
+          <Ionicons name="tennisball-outline" size={18} color={colors.primary} />
           <Text style={styles.secondaryButtonText}>Book Another Court</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -93,10 +94,10 @@ export default function BookingSuccessScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 24,
+    backgroundColor: colors.white,
+    paddingHorizontal: spacing.xl,
     paddingTop: 80,
-    paddingBottom: 40,
+    paddingBottom: spacing['3xl'],
   },
   content: {
     flex: 1,
@@ -107,55 +108,55 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#dcfce7',
+    backgroundColor: colors.successLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 32,
+    marginBottom: spacing['2xl'],
   },
   textBlock: { alignItems: 'center' },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 10,
+    fontSize: fontSizes.xl,
+    fontWeight: fontWeights.bold,
+    color: colors.neutral900,
+    marginBottom: spacing.md,
   },
   subtitle: {
-    fontSize: 15,
-    color: '#64748b',
+    fontSize: fontSizes.base,
+    color: colors.neutral500,
     textAlign: 'center',
     lineHeight: 22,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.lg,
   },
   footer: {
-    gap: 12,
+    gap: layout.itemGap,
   },
   primaryButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 14,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
     padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.white,
+    fontSize: fontSizes.base,
+    fontWeight: fontWeights.bold,
   },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderColor: colors.neutral200,
+    borderRadius: borderRadius.lg,
     padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   secondaryButtonText: {
-    color: '#2563eb',
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.primary,
+    fontSize: fontSizes.base,
+    fontWeight: fontWeights.semibold,
   },
 })

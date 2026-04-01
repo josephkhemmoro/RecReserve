@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
+import { toLocalISO } from './dateUtils'
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -30,7 +31,7 @@ export function useRebookSuggestion(userId, clubId, upcomingReservations) {
           .eq('user_id', userId)
           .eq('club_id', clubId)
           .in('status', ['confirmed', 'completed'])
-          .gte('start_time', sixtyDaysAgo.toISOString())
+          .gte('start_time', toLocalISO(sixtyDaysAgo))
           .order('start_time', { ascending: false })
           .limit(20)
 

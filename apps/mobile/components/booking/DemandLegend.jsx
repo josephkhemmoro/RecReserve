@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { DEMAND_COLORS, DEMAND_LABELS } from '../../lib/demandHelpers'
+import { textStyles, spacing, colors } from '../../theme'
 
 const LEVELS = ['open', 'filling', 'busy', 'almost_full']
 
@@ -17,27 +18,8 @@ export function DemandLegend() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    marginBottom: 8,
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-  },
+  container: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, marginBottom: spacing.sm },
+  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  label: { ...textStyles.caption, color: colors.neutral500 },
 })

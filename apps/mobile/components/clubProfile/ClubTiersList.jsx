@@ -1,9 +1,11 @@
 import { View, Text, StyleSheet } from 'react-native'
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { SectionHeader, Icon } from '../ui'
 
 export function ClubTiersList({ tiers }) {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Membership Options</Text>
+      <SectionHeader title="Membership Options" icon="pricetag-outline" />
 
       {!tiers || tiers.length === 0 ? (
         <Text style={styles.emptyText}>Standard membership — all members book at regular pricing</Text>
@@ -11,16 +13,19 @@ export function ClubTiersList({ tiers }) {
         <View style={styles.list}>
           {tiers.map((tier) => {
             let benefitText = 'Regular pricing'
-            if (tier.can_book_free) benefitText = 'Books free — no court fees'
-            else if (tier.discount_percent > 0) benefitText = `${tier.discount_percent}% off all court bookings`
-
+            let benefitIcon = 'card-outline'
+            if (tier.can_book_free) { benefitText = 'Books free — no court fees'; benefitIcon = 'checkmark-circle' }
+            else if (tier.discount_percent > 0) { benefitText = `${tier.discount_percent}% off all court bookings`; benefitIcon = 'pricetag' }
             return (
               <View key={tier.id} style={styles.tierCard}>
                 <View style={styles.tierHeader}>
-                  <View style={[styles.dot, { backgroundColor: tier.color || '#94a3b8' }]} />
+                  <View style={[styles.dot, { backgroundColor: tier.color || colors.neutral400 }]} />
                   <Text style={styles.tierName}>{tier.name}</Text>
                 </View>
-                <Text style={styles.benefitText}>{benefitText}</Text>
+                <View style={styles.benefitRow}>
+                  <Icon name={benefitIcon} size="sm" color={colors.neutral500} />
+                  <Text style={styles.benefitText}>{benefitText}</Text>
+                </View>
               </View>
             )
           })}
@@ -31,16 +36,13 @@ export function ClubTiersList({ tiers }) {
 }
 
 const styles = StyleSheet.create({
-  container: { paddingHorizontal: 20, marginBottom: 20 },
-  title: { fontSize: 16, fontWeight: '700', color: '#1e293b', marginBottom: 12 },
-  emptyText: { fontSize: 14, color: '#94a3b8' },
-  list: { gap: 2 },
-  tierCard: {
-    backgroundColor: '#ffffff', borderRadius: 12, padding: 14,
-    borderWidth: 1, borderColor: '#f1f5f9', marginBottom: 8,
-  },
-  tierHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  container: { paddingHorizontal: spacing.lg, marginBottom: spacing.lg },
+  emptyText: { ...textStyles.bodySmall, color: colors.neutral400 },
+  list: { gap: spacing.sm },
+  tierCard: { backgroundColor: colors.white, borderRadius: borderRadius.lg, padding: spacing.base, borderWidth: 1, borderColor: colors.neutral100 },
+  tierHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  tierName: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
-  benefitText: { fontSize: 13, color: '#64748b', marginLeft: 18 },
+  tierName: { ...textStyles.bodyMedium, color: colors.neutral900 },
+  benefitRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginLeft: spacing.lg },
+  benefitText: { ...textStyles.bodySmall, color: colors.neutral500 },
 })

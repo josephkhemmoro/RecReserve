@@ -1,11 +1,8 @@
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import { useAuthStore } from '../../store/authStore'
 import { useOpenSpotsStore } from '../../store/openSpotsStore'
-
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase()
-}
+import { colors, textStyles, spacing, borderRadius } from '../../theme'
+import { Avatar, Button, Badge, Icon } from '../ui'
 
 function formatShortDate(dateStr) {
   const d = new Date(dateStr)
@@ -31,65 +28,35 @@ export function OpenSpotFeedItem({ spot }) {
 
   return (
     <View style={styles.card}>
-      <Text style={styles.label}>🤝 LOOKING FOR PLAYERS</Text>
+      <Badge label="LOOKING FOR PLAYERS" variant="primary" icon="people-outline" size="sm" />
       <View style={styles.posterRow}>
-        {poster?.avatar_url ? (
-          <Image source={{ uri: poster.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarFallback}>
-            <Text style={styles.avatarText}>{getInitials(poster?.full_name)}</Text>
-          </View>
-        )}
+        <Avatar uri={poster?.avatar_url} name={poster?.full_name || '?'} size="sm" />
         <Text style={styles.posterName}>{poster?.full_name || 'Player'}</Text>
       </View>
-      <Text style={styles.courtText}>
-        {reservation?.court?.name || 'Court'} · {formatShortDate(reservation?.start_time)} {formatTime(reservation?.start_time)}
-      </Text>
-      {spot.description && (
-        <Text style={styles.description}>"{spot.description}"</Text>
-      )}
+      <View style={styles.detailRow}>
+        <Icon name="tennisball-outline" size="sm" color={colors.neutral500} />
+        <Text style={styles.detailText}>
+          {reservation?.court?.name || 'Court'} · {formatShortDate(reservation?.start_time)} {formatTime(reservation?.start_time)}
+        </Text>
+      </View>
+      {spot.description && <Text style={styles.description}>"{spot.description}"</Text>}
       {!isOwn && !alreadyRequested && (
-        <TouchableOpacity
-          style={styles.joinBtn}
-          onPress={() => sendRequest(spot.id, user?.id)}
-        >
-          <Text style={styles.joinText}>Request to Join</Text>
-        </TouchableOpacity>
+        <Button title="Request to Join" onPress={() => sendRequest(spot.id, user?.id)} variant="primary" size="sm" fullWidth />
       )}
-      {alreadyRequested && (
-        <Text style={styles.requestedText}>Requested ✓</Text>
-      )}
+      {alreadyRequested && <Badge label="Requested" variant="success" icon="checkmark-circle" />}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fefce8',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#fef08a',
+    backgroundColor: colors.primarySurface, borderRadius: borderRadius.lg,
+    padding: spacing.base, marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.primaryMuted, gap: spacing.sm,
   },
-  label: {
-    fontSize: 10, fontWeight: '700', color: '#a16207',
-    letterSpacing: 0.5, marginBottom: 8,
-  },
-  posterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  avatar: { width: 28, height: 28, borderRadius: 14 },
-  avatarFallback: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center',
-  },
-  avatarText: { fontSize: 10, fontWeight: '700', color: '#64748b' },
-  posterName: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
-  courtText: { fontSize: 13, color: '#475569', marginBottom: 4 },
-  description: { fontSize: 13, color: '#64748b', fontStyle: 'italic', marginBottom: 8 },
-  joinBtn: {
-    backgroundColor: '#2563eb', borderRadius: 8,
-    paddingVertical: 7, alignItems: 'center', marginTop: 4,
-  },
-  joinText: { color: '#ffffff', fontSize: 13, fontWeight: '700' },
-  requestedText: { fontSize: 13, fontWeight: '600', color: '#16a34a', marginTop: 4 },
+  posterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  posterName: { ...textStyles.label, color: colors.neutral800 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  detailText: { ...textStyles.bodySmall, color: colors.neutral600 },
+  description: { ...textStyles.bodySmall, color: colors.neutral500, fontStyle: 'italic' },
 })

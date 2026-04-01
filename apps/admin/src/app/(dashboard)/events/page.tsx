@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 import type { EventType } from "@recreserve/shared";
+import { localDateStr } from "@/lib/dateUtils";
+import { PageHeader, Card, Button, Badge, FormInput, FormSelect, FormTextarea, EmptyState, Skeleton } from "@/components/ui";
 
 interface ClubEvent {
   id: string;
@@ -34,6 +36,18 @@ const EMPTY_FORM = {
   max_participants: "",
   description: "",
   price: "0",
+};
+
+const EVENT_TYPE_OPTIONS = EVENT_TYPES.map((t) => ({
+  value: t,
+  label: t.replace("_", " "),
+}));
+
+const EVENT_TYPE_BADGE_VARIANT: Record<string, "brand" | "success" | "warning" | "info" | "default"> = {
+  open_play: "brand",
+  clinic: "success",
+  tournament: "warning",
+  lesson: "info",
 };
 
 export default function EventsPage() {
@@ -106,7 +120,7 @@ export default function EventsPage() {
     setFormError("");
 
     // Validate date is not in the past
-    const today = new Date().toISOString().split("T")[0];
+    const today = localDateStr();
     if (form.date < today) {
       setFormError("Event date cannot be in the past.");
       return;
@@ -197,92 +211,104 @@ export default function EventsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Events</h1>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Create Event
-        </button>
-      </div>
+      <PageHeader
+        title="Events"
+        action={
+          <Button onClick={() => setShowForm(true)}>Create Event</Button>
+        }
+      />
 
       {showForm && (
-        <div className="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">New Event</h2>
+        <Card title="New Event" className="mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Title</label>
-              <input
-                type="text"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Open Play Night"
+            <FormInput
+              label="Title"
+              value={form.title}
+              onChange={(v) => setForm({ ...form, title: v })}
+              placeholder="Open Play Night"
+            />
+            <FormSelect
+              label="Type"
+              value={form.event_type}
+              onChange={(v) => setForm({ ...form, event_type: v as EventType })}
+              options={EVENT_TYPE_OPTIONS}
+            />
+            <FormInput
+              label="Date"
+              type="date"
+              value={form.date}
+              onChange={(v) => setForm({ ...form, date: v })}
+            />
+            <div className="flex gap-2">
+              <FormInput
+                label="Start"
+                type="time"
+                value={form.start_time}
+                onChange={(v) => setForm({ ...form, start_time: v })}
+                className="flex-1"
+              />
+              <FormInput
+                label="End"
+                type="time"
+                value={form.end_time}
+                onChange={(v) => setForm({ ...form, end_time: v })}
+                className="flex-1"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Type</label>
-              <select
-                value={form.event_type}
-                onChange={(e) => setForm({ ...form, event_type: e.target.value as EventType })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {EVENT_TYPES.map((t) => (
-                  <option key={t} value={t} className="capitalize">{formatEventType(t)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date</label>
-              <input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Start</label>
-                <input type="time" value={form.start_time} onChange={(e) => setForm({ ...form, start_time: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-slate-700 mb-1">End</label>
-                <input type="time" value={form.end_time} onChange={(e) => setForm({ ...form, end_time: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Max Participants</label>
-              <input type="number" min="0" value={form.max_participants} onChange={(e) => setForm({ ...form, max_participants: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Leave blank for unlimited" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Price ($)</label>
-              <input type="number" min="0" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>
-              <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-3 py-2 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+            <FormInput
+              label="Max Participants"
+              type="number"
+              min={0}
+              value={form.max_participants}
+              onChange={(v) => setForm({ ...form, max_participants: v })}
+              placeholder="Leave blank for unlimited"
+            />
+            <FormInput
+              label="Price ($)"
+              type="number"
+              min={0}
+              step={0.01}
+              value={form.price}
+              onChange={(v) => setForm({ ...form, price: v })}
+            />
+            <FormTextarea
+              label="Description"
+              value={form.description}
+              onChange={(v) => setForm({ ...form, description: v })}
+              rows={2}
+              className="sm:col-span-2"
+            />
           </div>
           {formError && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mt-4 text-sm">
+            <div className="bg-error-light border border-red-200 text-error px-4 py-3 rounded-lg mt-4 text-sm">
               {formError}
             </div>
           )}
           <div className="flex gap-3 mt-4">
-            <button onClick={handleCreate} disabled={saving || !form.title.trim() || !form.date} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <Button
+              onClick={handleCreate}
+              disabled={saving || !form.title.trim() || !form.date}
+              loading={saving}
+            >
               {saving ? "Creating..." : "Create Event"}
-            </button>
-            <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormError(""); }} className="px-4 py-2 text-slate-600 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50">
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setFormError(""); }}
+            >
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200">
+      <Card noPadding>
         {isLoading ? (
-          <div className="p-6 space-y-3 animate-pulse">
-            {[1, 2, 3].map((i) => <div key={i} className="h-10 bg-slate-100 rounded" />)}
+          <div className="p-6 space-y-3">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
           </div>
         ) : events.length === 0 ? (
-          <div className="p-10 text-center text-slate-500">No events yet</div>
+          <EmptyState title="No events yet" description="Create your first event to get started." />
         ) : (
           <table className="w-full">
             <thead>
@@ -297,10 +323,15 @@ export default function EventsPage() {
             </thead>
             <tbody>
               {events.map((ev) => (
-                <>
-                  <tr key={ev.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                <React.Fragment key={ev.id}>
+                  <tr className="border-b border-slate-50 hover:bg-slate-50/50">
                     <td className="px-6 py-3 text-sm font-medium text-slate-900">{ev.title}</td>
-                    <td className="px-6 py-3 text-sm text-slate-600 capitalize">{formatEventType(ev.event_type)}</td>
+                    <td className="px-6 py-3">
+                      <Badge
+                        label={formatEventType(ev.event_type)}
+                        variant={EVENT_TYPE_BADGE_VARIANT[ev.event_type] ?? "default"}
+                      />
+                    </td>
                     <td className="px-6 py-3 text-sm text-slate-600">{formatDateTime(ev.start_time)}</td>
                     <td className="px-6 py-3 text-sm text-slate-600">
                       {ev.registrant_count}{ev.max_participants ? ` / ${ev.max_participants}` : ""}
@@ -309,23 +340,25 @@ export default function EventsPage() {
                       {Number(ev.price) > 0 ? `$${Number(ev.price).toFixed(2)}` : "Free"}
                     </td>
                     <td className="px-6 py-3 text-right space-x-2">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => fetchRegistrants(ev.id)}
-                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
                       >
                         {selectedEventId === ev.id ? "Hide" : "Registrants"}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
                         onClick={() => handleCancelEvent(ev.id)}
-                        className="text-sm text-red-600 hover:text-red-800 font-medium"
                       >
                         Cancel
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                   {selectedEventId === ev.id && (
                     <tr key={`${ev.id}-reg`}>
-                      <td colSpan={6} className="bg-slate-50 px-6 py-4">
+                      <td colSpan={6} className="bg-brand-surface px-6 py-4">
                         {loadingReg ? (
                           <p className="text-sm text-slate-500">Loading registrants...</p>
                         ) : registrants.length === 0 ? (
@@ -335,13 +368,14 @@ export default function EventsPage() {
                             {registrants.map((r) => (
                               <div key={r.id} className="flex items-center justify-between text-sm">
                                 <span className="text-slate-900">{r.user?.full_name ?? r.user?.email ?? "—"}</span>
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  r.status === "registered" ? "bg-green-50 text-green-700"
-                                    : r.status === "waitlisted" ? "bg-amber-50 text-amber-700"
-                                    : "bg-slate-100 text-slate-500"
-                                }`}>
-                                  {r.status}
-                                </span>
+                                <Badge
+                                  label={r.status}
+                                  variant={
+                                    r.status === "registered" ? "success"
+                                      : r.status === "waitlisted" ? "warning"
+                                      : "default"
+                                  }
+                                />
                               </div>
                             ))}
                           </div>
@@ -349,12 +383,12 @@ export default function EventsPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

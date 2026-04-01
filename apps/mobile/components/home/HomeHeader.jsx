@@ -1,12 +1,8 @@
 import { useState } from 'react'
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native'
-import Ionicons from '@expo/vector-icons/Ionicons'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { useRouter } from 'expo-router'
-
-function getInitials(name) {
-  if (!name) return '?'
-  return name.split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase()
-}
+import { colors, textStyles, spacing, borderRadius, shadows } from '../../theme'
+import { Icon, Avatar } from '../ui'
 
 function getGreeting(firstName, hour) {
   if (hour < 12) return `Good morning, ${firstName}`
@@ -29,7 +25,6 @@ export function HomeHeader({
 
   return (
     <View style={styles.container}>
-      {/* Row 1: Greeting + actions */}
       <View style={styles.topRow}>
         <Text style={styles.greeting} numberOfLines={1}>
           {getGreeting(firstName, hour)}
@@ -39,7 +34,7 @@ export function HomeHeader({
             style={styles.iconBtn}
             onPress={() => router.push('/(tabs)/notifications')}
           >
-            <Ionicons name="notifications-outline" size={22} color="#1e293b" />
+            <Icon name="notifications-outline" size="md" color={colors.neutral800} />
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -48,32 +43,25 @@ export function HomeHeader({
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.clubBtn} onPress={onToggleClubPicker}>
-            {selectedClub?.logo_url ? (
-              <Image source={{ uri: selectedClub.logo_url }} style={styles.clubMini} />
-            ) : (
-              <View style={styles.clubMiniFallback}>
-                <Text style={styles.clubMiniText}>{getInitials(selectedClub?.name)}</Text>
-              </View>
-            )}
-            <Ionicons name="chevron-down" size={14} color="#64748b" />
+            <Avatar uri={selectedClub?.logo_url} name={selectedClub?.name || '?'} size="sm" />
+            <Icon name="chevron-down" size="sm" color={colors.neutral400} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Row 2: Rebook suggestion */}
       {showSuggestion && (
         <View style={styles.suggestion}>
+          <Icon name="repeat-outline" size="sm" color={colors.primary} style={{ marginTop: 2 }} />
           <View style={styles.suggestionContent}>
             <Text style={styles.suggestionText}>{rebookSuggestion.message}</Text>
-            <Text style={styles.suggestionSub}>
-              {rebookSuggestion.preferredCourtName}
-            </Text>
+            <Text style={styles.suggestionSub}>{rebookSuggestion.preferredCourtName}</Text>
           </View>
           <TouchableOpacity style={styles.rebookBtn} onPress={onRebook}>
-            <Text style={styles.rebookText}>Book Again →</Text>
+            <Text style={styles.rebookText}>Book Again</Text>
+            <Icon name="arrow-forward" size="sm" color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.dismissBtn} onPress={() => setDismissed(true)}>
-            <Ionicons name="close" size={16} color="#94a3b8" />
+            <Icon name="close" size="sm" color={colors.neutral400} />
           </TouchableOpacity>
         </View>
       )}
@@ -82,33 +70,28 @@ export function HomeHeader({
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 16 },
+  container: { marginBottom: spacing.base },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  greeting: { fontSize: 22, fontWeight: '700', color: '#1e293b', flex: 1, marginRight: 12 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  iconBtn: { position: 'relative', padding: 4 },
+  greeting: { ...textStyles.heading3, color: colors.neutral900, flex: 1, marginRight: spacing.md },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  iconBtn: { position: 'relative', padding: spacing.xs },
   badge: {
     position: 'absolute', top: 0, right: 0,
-    backgroundColor: '#ef4444', borderRadius: 8, minWidth: 16, height: 16,
+    backgroundColor: colors.accent, borderRadius: borderRadius.full, minWidth: 16, height: 16,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3,
   },
-  badgeText: { fontSize: 9, fontWeight: '700', color: '#ffffff' },
-  clubBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  clubMini: { width: 28, height: 28, borderRadius: 8 },
-  clubMiniFallback: {
-    width: 28, height: 28, borderRadius: 8,
-    backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center',
-  },
-  clubMiniText: { fontSize: 10, fontWeight: '700', color: '#64748b' },
+  badgeText: { fontSize: 9, fontWeight: '700', color: colors.white },
+  clubBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   suggestion: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#eff6ff', borderRadius: 12, padding: 12, marginTop: 12,
-    borderWidth: 1, borderColor: '#dbeafe',
+    backgroundColor: colors.primarySurface, borderRadius: borderRadius.lg,
+    padding: spacing.md, marginTop: spacing.md,
+    borderWidth: 1, borderColor: colors.primaryMuted, gap: spacing.sm,
   },
   suggestionContent: { flex: 1 },
-  suggestionText: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
-  suggestionSub: { fontSize: 12, color: '#64748b', marginTop: 1 },
-  rebookBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-  rebookText: { fontSize: 13, fontWeight: '700', color: '#2563eb' },
-  dismissBtn: { padding: 4 },
+  suggestionText: { ...textStyles.label, color: colors.neutral800 },
+  suggestionSub: { ...textStyles.caption, color: colors.neutral500, marginTop: 1 },
+  rebookBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: spacing.sm },
+  rebookText: { ...textStyles.label, color: colors.primary },
+  dismissBtn: { padding: spacing.xs },
 })

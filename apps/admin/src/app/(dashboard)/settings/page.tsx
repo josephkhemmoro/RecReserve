@@ -311,7 +311,7 @@ export default function SettingsPage() {
           <p className="text-sm text-slate-500 mb-6">{fetchError}</p>
           <button
             onClick={() => admin?.clubId && fetchClub(admin.clubId)}
-            className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            className="px-5 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand-dark transition-colors"
           >
             Retry
           </button>
@@ -350,7 +350,7 @@ export default function SettingsPage() {
               )}
               {uploading && (
                 <div className="absolute inset-0 rounded-2xl bg-white/80 flex items-center justify-center">
-                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-blue-600" />
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-brand" />
                 </div>
               )}
             </div>
@@ -373,7 +373,7 @@ export default function SettingsPage() {
                 JPG, PNG or GIF. Max 1 MB after compression.
               </p>
               {uploadError && (
-                <p className="text-xs text-red-600 mt-1">{uploadError}</p>
+                <p className="text-xs text-error mt-1">{uploadError}</p>
               )}
             </div>
           </div>
@@ -396,12 +396,12 @@ export default function SettingsPage() {
                   setForm({ ...form, name: e.target.value });
                   setValidationErrors((v) => ({ ...v, name: "" }));
                 }}
-                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${
                   validationErrors.name ? "border-red-300" : "border-slate-300"
                 }`}
               />
               {validationErrors.name && (
-                <p className="text-xs text-red-600 mt-1">{validationErrors.name}</p>
+                <p className="text-xs text-error mt-1">{validationErrors.name}</p>
               )}
             </div>
 
@@ -418,14 +418,14 @@ export default function SettingsPage() {
                 }}
                 rows={3}
                 maxLength={500}
-                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${
                   validationErrors.description ? "border-red-300" : "border-slate-300"
                 }`}
                 placeholder="A brief description of your club"
               />
               <div className="flex justify-between mt-1">
                 {validationErrors.description ? (
-                  <p className="text-xs text-red-600">{validationErrors.description}</p>
+                  <p className="text-xs text-error">{validationErrors.description}</p>
                 ) : (
                   <span />
                 )}
@@ -444,7 +444,7 @@ export default function SettingsPage() {
                 type="text"
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-2.5 rounded-lg border border-slate-300 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
                 placeholder="123 Main St, City, State"
               />
             </div>
@@ -461,13 +461,13 @@ export default function SettingsPage() {
                   setForm({ ...form, phone: e.target.value });
                   setValidationErrors((v) => ({ ...v, phone: "" }));
                 }}
-                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${
                   validationErrors.phone ? "border-red-300" : "border-slate-300"
                 }`}
                 placeholder="(555) 123-4567"
               />
               {validationErrors.phone && (
-                <p className="text-xs text-red-600 mt-1">{validationErrors.phone}</p>
+                <p className="text-xs text-error mt-1">{validationErrors.phone}</p>
               )}
             </div>
 
@@ -483,13 +483,13 @@ export default function SettingsPage() {
                   setForm({ ...form, website: e.target.value });
                   setValidationErrors((v) => ({ ...v, website: "" }));
                 }}
-                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`w-full px-4 py-2.5 rounded-lg border text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${
                   validationErrors.website ? "border-red-300" : "border-slate-300"
                 }`}
                 placeholder="https://www.yourclub.com"
               />
               {validationErrors.website && (
-                <p className="text-xs text-red-600 mt-1">{validationErrors.website}</p>
+                <p className="text-xs text-error mt-1">{validationErrors.website}</p>
               )}
             </div>
           </div>
@@ -499,7 +499,7 @@ export default function SettingsPage() {
             <button
               onClick={handleSave}
               disabled={!isDirty || saving}
-              className="px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-2"
+              className="px-5 py-2.5 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand-dark disabled:opacity-50 transition-colors flex items-center gap-2"
             >
               {saving && (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -507,7 +507,7 @@ export default function SettingsPage() {
               {saving ? "Saving..." : "Save Changes"}
             </button>
             {saved && (
-              <span className="flex items-center gap-1 text-sm font-medium text-green-600">
+              <span className="flex items-center gap-1 text-sm font-medium text-success">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                 </svg>
@@ -515,7 +515,7 @@ export default function SettingsPage() {
               </span>
             )}
             {saveError && (
-              <span className="text-sm text-red-600">{saveError}</span>
+              <span className="text-sm text-error">{saveError}</span>
             )}
           </div>
         </div>
@@ -538,7 +538,7 @@ export default function SettingsPage() {
             <div className="relative group">
               <button
                 disabled
-                className="px-4 py-2 text-sm font-medium text-red-600 rounded-lg border border-red-200 opacity-50 cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-error rounded-lg border border-red-200 opacity-50 cursor-not-allowed"
               >
                 Transfer
               </button>

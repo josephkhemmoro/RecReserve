@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
+import { localDateStr, localDayStart, localDayEnd } from "@/lib/dateUtils";
 
 interface Court {
   id: string;
@@ -22,7 +23,7 @@ interface GridReservation {
 const DEFAULT_HOURS = Array.from({ length: 14 }, (_, i) => i + 6); // 6AM to 7PM
 
 function formatDateInput(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return localDateStr(d);
 }
 
 export default function ReservationsPage() {
@@ -39,8 +40,9 @@ export default function ReservationsPage() {
     setLoading(true);
     try {
       const supabase = createClient();
-      const dayStart = `${date}T00:00:00`;
-      const dayEnd = `${date}T23:59:59`;
+      const dateForBounds = new Date(date + "T00:00:00");
+      const dayStart = localDayStart(dateForBounds);
+      const dayEnd = localDayEnd(dateForBounds);
 
       const [courtsRes, resRes] = await Promise.all([
         supabase
@@ -165,7 +167,7 @@ export default function ReservationsPage() {
           </button>
           <button
             onClick={() => setSelectedDate(formatDateInput(new Date()))}
-            className="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
+            className="px-3 py-2 rounded-lg bg-brand text-white text-sm font-medium hover:bg-brand-dark"
           >
             Today
           </button>
@@ -206,7 +208,7 @@ export default function ReservationsPage() {
                         {res ? (
                           <button
                             onClick={() => setModal(res)}
-                            className="w-full px-2 py-1.5 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 font-medium truncate hover:bg-blue-100 transition-colors"
+                            className="w-full px-2 py-1.5 rounded bg-brand-surface border border-brand-muted text-xs text-brand font-medium truncate hover:bg-brand-muted transition-colors"
                           >
                             {res.user?.full_name ?? "Booked"}
                           </button>

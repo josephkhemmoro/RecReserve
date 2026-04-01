@@ -14,11 +14,18 @@ import { useBookingStore } from '../../../store/bookingStore'
 import { useClubStore } from '../../../store/clubStore'
 import { usePricing } from '../../../lib/usePricing'
 import { useSlotDemand } from '../../../lib/useSlotDemand'
-import { DEMAND_BG_COLORS } from '../../../lib/demandHelpers'
-import { SlotDemandIndicator } from '../../../components/booking/SlotDemandIndicator'
-import { DemandLegend } from '../../../components/booking/DemandLegend'
+import { DEMAND_COLORS } from '../../../lib/demandHelpers'
+import { localDayStart, localDayEnd } from '../../../lib/dateUtils'
+import { colors, spacing, borderRadius, shadows, fontSizes, fontWeights, layout } from '../../../theme'
 
-const SLOT_INCREMENT = 30 // 30-minute increments
+const SLOT_INCREMENT = 30
+
+const DURATION_OPTIONS = [
+  { mins: 30, label: '30m' },
+  { mins: 60, label: '1h' },
+  { mins: 90, label: '1.5h' },
+  { mins: 120, label: '2h' },
+]
 
 function generateTimeSlots(availability, dayOfWeek) {
   const dayAvail = availability.filter((a) => a.day_of_week === dayOfWeek)
@@ -36,12 +43,6 @@ function generateTimeSlots(availability, dayOfWeek) {
         time: `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`,
       })
     }
-    // Add close time as a possible end-time marker
-    slots.push({
-      minutes: endMins,
-      time: `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}`,
-      isEndOnly: true,
-    })
   }
 
   return slots.sort((a, b) => a.minutes - b.minutes)
@@ -49,6 +50,14 @@ function generateTimeSlots(availability, dayOfWeek) {
 
 function formatTime12(time24) {
   const [h, m] = time24.split(':').map(Number)
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+function minsToTime12(mins) {
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
   const ampm = h >= 12 ? 'PM' : 'AM'
   const h12 = h % 12 || 12
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
@@ -68,13 +77,12 @@ export default function BookCourtScreen() {
   const [availability, setAvailability] = useState([])
   const [reservations, setReservations] = useState([])
   const [loading, setLoading] = useState(true)
-  const [startSlot, setStartSlot] = useState(null)
-  const [endSlot, setEndSlot] = useState(null)
+  const [selectedStart, setSelectedStart] = useState(null)
+  const [selectedDuration, setSelectedDuration] = useState(60)
 
-  const durationMinutes = startSlot && endSlot ? endSlot.minutes - startSlot.minutes : 0
   const hourlyRate = court?.hourly_rate ?? 0
-  const pricing = usePricing(hourlyRate, durationMinutes)
-  const { demandMap, isLoading: demandLoading } = useSlotDemand(selectedClub?.id, date)
+  const pricing = usePricing(hourlyRate, selectedStart ? selectedDuration : 0)
+  const { demandMap } = useSlotDemand(selectedClub?.id, date)
 
   const dateObj = useMemo(() => new Date(date + 'T00:00:00'), [date])
   const dayOfWeek = dateObj.getDay()
@@ -84,30 +92,20 @@ export default function BookCourtScreen() {
     [availability, dayOfWeek]
   )
 
-  // Filter out end-only markers for display (only used as valid end times)
-  const displaySlots = allSlots.filter((s) => !s.isEndOnly)
-
   useEffect(() => {
     fetchData()
   }, [courtId, date])
 
-  // Realtime subscription
   useEffect(() => {
     if (!courtId) return
     const channel = supabase
       .channel(`reservations-book-${courtId}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'reservations',
-          filter: `court_id=eq.${courtId}`,
-        },
+        { event: '*', schema: 'public', table: 'reservations', filter: `court_id=eq.${courtId}` },
         () => fetchReservations()
       )
       .subscribe()
-
     return () => supabase.removeChannel(channel)
   }, [courtId, date])
 
@@ -119,7 +117,6 @@ export default function BookCourtScreen() {
           : supabase.from('courts').select('*').eq('id', courtId).single(),
         supabase.from('court_availability').select('*').eq('court_id', courtId),
       ])
-
       if (courtRes.error) throw courtRes.error
       setCourt(courtRes.data)
       setAvailability(availRes.data || [])
@@ -133,9 +130,9 @@ export default function BookCourtScreen() {
 
   const fetchReservations = async () => {
     try {
-      const dayStart = `${date}T00:00:00`
-      const dayEnd = `${date}T23:59:59`
-
+      const dateForBounds = new Date(date + 'T00:00:00')
+      const dayStart = localDayStart(dateForBounds)
+      const dayEnd = localDayEnd(dateForBounds)
       const { data } = await supabase
         .from('reservations')
         .select('id, start_time, end_time, status')
@@ -143,85 +140,59 @@ export default function BookCourtScreen() {
         .eq('status', 'confirmed')
         .gte('start_time', dayStart)
         .lte('start_time', dayEnd)
-
       setReservations(data || [])
     } catch (err) {
       console.error('Error fetching reservations:', err)
     }
   }
 
-  const isSlotBooked = (slot) => {
-    const slotStart = slot.minutes
-    const slotEnd = slotStart + SLOT_INCREMENT
-
+  const isSlotBooked = (slotMins) => {
+    const slotEnd = slotMins + SLOT_INCREMENT
     return reservations.some((r) => {
       const rStart = new Date(r.start_time)
       const rStartMins = rStart.getHours() * 60 + rStart.getMinutes()
       const rEnd = new Date(r.end_time)
       const rEndMins = rEnd.getHours() * 60 + rEnd.getMinutes()
-      return slotStart < rEndMins && slotEnd > rStartMins
+      return slotMins < rEndMins && slotEnd > rStartMins
     })
   }
 
-  const isSlotPast = (slot) => {
+  const isSlotPast = (slotMins) => {
     const now = new Date()
     const todayLocal = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     if (date > todayLocal) return false
     if (date < todayLocal) return true
-    const nowMins = now.getHours() * 60 + now.getMinutes()
-    return slot.minutes < nowMins
+    return slotMins < now.getHours() * 60 + now.getMinutes()
   }
 
-  const isSlotInRange = (slot) => {
-    if (!startSlot || !endSlot) return false
-    return slot.minutes >= startSlot.minutes && slot.minutes < endSlot.minutes
-  }
-
-  const isSlotStart = (slot) => startSlot && slot.minutes === startSlot.minutes
-
-  // Check if selecting this end would cross a booked slot
-  const wouldCrossBooking = (start, end) => {
-    return displaySlots.some((s) => {
-      return s.minutes >= start.minutes && s.minutes < end.minutes && isSlotBooked(s)
-    })
-  }
-
-  const handleSlotPress = (slot) => {
-    if (isSlotBooked(slot) || isSlotPast(slot)) return
-
-    if (!startSlot) {
-      // First tap: select start
-      setStartSlot(slot)
-      setEndSlot(null)
-    } else if (!endSlot) {
-      if (slot.minutes <= startSlot.minutes) {
-        // Tapped before or same as start — reset to this as new start
-        setStartSlot(slot)
-        setEndSlot(null)
-      } else {
-        // Check for bookings between start and this slot
-        const candidateEnd = { minutes: slot.minutes + SLOT_INCREMENT, time: '' }
-        if (wouldCrossBooking(startSlot, candidateEnd)) {
-          // Can't cross a booked slot — reset
-          setStartSlot(slot)
-          setEndSlot(null)
-        } else {
-          setEndSlot({ minutes: slot.minutes + SLOT_INCREMENT, time: '' })
-        }
-      }
-    } else {
-      // Both selected — start over
-      setStartSlot(slot)
-      setEndSlot(null)
+  // Check if a duration is valid for a given start
+  const isDurationValid = (startMins, durationMins) => {
+    const endMins = startMins + durationMins
+    // Check every 30-min block in the range
+    for (let m = startMins; m < endMins; m += SLOT_INCREMENT) {
+      if (isSlotBooked(m)) return false
+      // Check if slot exists in availability
+      if (!allSlots.some((s) => s.minutes === m)) return false
     }
+    return true
   }
+
+  // Get demand color for a slot
+  const getDemandDot = (slotTime) => {
+    const demand = demandMap[slotTime]
+    if (!demand) return null
+    return DEMAND_COLORS[demand.demandLevel] || null
+  }
+
+  // Compute end time
+  const endMins = selectedStart ? selectedStart.minutes + selectedDuration : 0
+  const endTime = endMins > 0 ? `${String(Math.floor(endMins / 60)).padStart(2, '0')}:${String(endMins % 60).padStart(2, '0')}` : ''
+
+  const canContinue = selectedStart && selectedDuration > 0 && isDurationValid(selectedStart.minutes, selectedDuration)
 
   const handleContinue = () => {
-    if (!startSlot || !endSlot || durationMinutes <= 0) return
-
-    const endTime = `${String(Math.floor(endSlot.minutes / 60)).padStart(2, '0')}:${String(endSlot.minutes % 60).padStart(2, '0')}`
-
-    setTimeRange(startSlot.time, endTime, durationMinutes)
+    if (!canContinue) return
+    setTimeRange(selectedStart.time, endTime, selectedDuration)
     setPriceBreakdown(pricing)
     router.push('/booking/confirm')
   }
@@ -237,7 +208,7 @@ export default function BookCourtScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     )
   }
@@ -247,154 +218,140 @@ export default function BookCourtScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backRow}>
-          <Ionicons name="arrow-back" size={22} color="#2563eb" />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>{court?.name || 'Select Time'}</Text>
         <Text style={styles.subtitle}>{formatDisplayDate()}</Text>
       </View>
 
-      {/* Instructions */}
-      <View style={styles.instructionBar}>
-        <Ionicons
-          name={!startSlot ? 'hand-left-outline' : 'resize-outline'}
-          size={16}
-          color="#64748b"
-        />
-        <Text style={styles.instructionText}>
-          {!startSlot
-            ? 'Tap a slot to set your start time'
-            : !endSlot
-              ? 'Now tap a slot to set your end time'
-              : 'Tap a slot to start over'}
-        </Text>
-      </View>
-
-      {/* Demand legend */}
-      {!demandLoading && Object.keys(demandMap).length > 0 && <DemandLegend />}
-
-      {/* Scarcity nudge for prime-time */}
-      {!demandLoading && displaySlots.some((s) => {
-        const mins = s.minutes
-        const demand = demandMap[s.time]
-        return mins >= 17 * 60 && mins < 20 * 60 && demand?.demandLevel === 'almost_full'
-      }) && (
-        <View style={styles.nudgeBanner}>
-          <Text style={styles.nudgeText}>Popular day! Prime-time slots are filling fast.</Text>
-        </View>
-      )}
-
-      {/* Time slots */}
       <ScrollView
-        style={styles.slotsScroll}
-        contentContainerStyle={styles.slotsContent}
+        style={styles.mainScroll}
+        contentContainerStyle={styles.mainContent}
         showsVerticalScrollIndicator={false}
       >
-        {displaySlots.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={48} color="#cbd5e1" />
-            <Text style={styles.emptyTitle}>No availability</Text>
-            <Text style={styles.emptySubtitle}>
-              This court has no time slots for the selected day
-            </Text>
-          </View>
-        ) : (
-          displaySlots.map((slot) => {
-            const booked = isSlotBooked(slot)
-            const past = isSlotPast(slot)
-            const inRange = isSlotInRange(slot)
-            const isStart = isSlotStart(slot)
-            const disabled = booked || past
-
-            let slotStyle = styles.slotDefault
-            let timeStyle = styles.slotTimeDefault
-            let labelText = formatTime12(slot.time)
-            let sublabel = ''
-            const demand = demandMap[slot.time]
-            const isAvailable = !past && !booked && !isStart && !inRange
-
-            if (past) {
-              slotStyle = styles.slotPast
-              timeStyle = styles.slotTimePast
-              sublabel = 'Past'
-            } else if (booked) {
-              slotStyle = styles.slotBooked
-              timeStyle = styles.slotTimeBooked
-              sublabel = 'Booked'
-            } else if (isStart && !endSlot) {
-              slotStyle = styles.slotStart
-              timeStyle = styles.slotTimeSelected
-              sublabel = 'Start'
-            } else if (inRange) {
-              slotStyle = styles.slotInRange
-              timeStyle = styles.slotTimeSelected
-            } else if (isStart) {
-              slotStyle = styles.slotStart
-              timeStyle = styles.slotTimeSelected
-              sublabel = 'Start'
-            }
-
-            // Apply demand background tint to available slots only
-            const demandBg = isAvailable && demand
-              ? { backgroundColor: DEMAND_BG_COLORS[demand.demandLevel] || '#ffffff' }
-              : null
-
+        {/* Duration selector */}
+        <Text style={styles.sectionLabel}>Duration</Text>
+        <View style={styles.durationRow}>
+          {DURATION_OPTIONS.map((opt) => {
+            const active = selectedDuration === opt.mins
+            const valid = selectedStart ? isDurationValid(selectedStart.minutes, opt.mins) : true
             return (
               <TouchableOpacity
-                key={slot.minutes}
-                style={[styles.slotRow, slotStyle, demandBg]}
-                onPress={() => handleSlotPress(slot)}
-                disabled={disabled}
-                activeOpacity={0.6}
+                key={opt.mins}
+                style={[styles.durationChip, active && styles.durationChipActive, !valid && styles.durationChipDisabled]}
+                onPress={() => valid && setSelectedDuration(opt.mins)}
+                disabled={!valid}
+                activeOpacity={0.7}
               >
-                <Text style={[styles.slotTime, timeStyle]}>{labelText}</Text>
-                {sublabel ? (
-                  <Text style={[styles.slotSublabel, booked && styles.slotSublabelBooked]}>
-                    {sublabel}
-                  </Text>
-                ) : null}
-                {isAvailable && demand && (
-                  <SlotDemandIndicator demandLevel={demand.demandLevel} compact />
-                )}
-                {inRange && !isStart && (
-                  <View style={styles.selectedDot} />
-                )}
+                <Text style={[styles.durationText, active && styles.durationTextActive, !valid && styles.durationTextDisabled]}>
+                  {opt.label}
+                </Text>
               </TouchableOpacity>
             )
-          })
+          })}
+        </View>
+
+        {/* Start time grid */}
+        <Text style={styles.sectionLabel}>Start Time</Text>
+
+        {allSlots.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={48} color={colors.neutral300} />
+            <Text style={styles.emptyTitle}>No availability</Text>
+            <Text style={styles.emptySubtitle}>This court has no time slots for this day</Text>
+          </View>
+        ) : (
+          <View style={styles.slotGrid}>
+            {allSlots.map((slot) => {
+              const booked = isSlotBooked(slot.minutes)
+              const past = isSlotPast(slot.minutes)
+              const disabled = booked || past
+              const isSelected = selectedStart?.minutes === slot.minutes
+              const canFitDuration = !disabled && isDurationValid(slot.minutes, selectedDuration)
+              const demandColor = getDemandDot(slot.time)
+
+              // If this start + selected duration doesn't fit, dim it
+              const dimmed = !disabled && !canFitDuration
+
+              return (
+                <TouchableOpacity
+                  key={slot.minutes}
+                  style={[
+                    styles.slotCell,
+                    isSelected && styles.slotCellSelected,
+                    disabled && styles.slotCellDisabled,
+                    dimmed && styles.slotCellDimmed,
+                  ]}
+                  onPress={() => {
+                    if (disabled) return
+                    if (canFitDuration) {
+                      setSelectedStart(slot)
+                    } else {
+                      // Try to find a shorter valid duration
+                      for (const opt of DURATION_OPTIONS) {
+                        if (isDurationValid(slot.minutes, opt.mins)) {
+                          setSelectedStart(slot)
+                          setSelectedDuration(opt.mins)
+                          return
+                        }
+                      }
+                    }
+                  }}
+                  disabled={disabled}
+                  activeOpacity={0.6}
+                >
+                  <Text style={[
+                    styles.slotCellTime,
+                    isSelected && styles.slotCellTimeSelected,
+                    disabled && styles.slotCellTimeDisabled,
+                    dimmed && styles.slotCellTimeDimmed,
+                  ]}>
+                    {formatTime12(slot.time)}
+                  </Text>
+                  {!disabled && !isSelected && demandColor && (
+                    <View style={[styles.demandDot, { backgroundColor: demandColor }]} />
+                  )}
+                  {booked && <Text style={styles.bookedLabel}>Booked</Text>}
+                </TouchableOpacity>
+              )
+            })}
+          </View>
         )}
+
+        <View style={{ height: 140 }} />
       </ScrollView>
 
-      {/* Bottom bar with pricing and continue */}
-      {startSlot && endSlot && durationMinutes > 0 && (
+      {/* Bottom bar */}
+      {selectedStart && canContinue && (
         <View style={styles.bottomBar}>
-          <View style={styles.bottomInfo}>
-            <Text style={styles.bottomTimeRange}>
-              {formatTime12(startSlot.time)} – {formatTime12(
-                `${String(Math.floor(endSlot.minutes / 60)).padStart(2, '0')}:${String(endSlot.minutes % 60).padStart(2, '0')}`
-              )}
-            </Text>
-            <Text style={styles.bottomDuration}>
-              {durationMinutes >= 60
-                ? `${Math.floor(durationMinutes / 60)}h${durationMinutes % 60 > 0 ? ` ${durationMinutes % 60}m` : ''}`
-                : `${durationMinutes}m`}
-            </Text>
-          </View>
-          <View style={styles.bottomPriceRow}>
-            {pricing.is_free ? (
-              <Text style={styles.bottomPriceFree}>Free</Text>
-            ) : (
-              <Text style={styles.bottomPrice}>${pricing.final_price.toFixed(2)}</Text>
-            )}
-            {pricing.discount_amount > 0 && !pricing.is_free && (
-              <Text style={styles.bottomDiscount}>
-                {Math.round((pricing.discount_amount / pricing.base_price) * 100)}% off
+          <View style={styles.bottomSummary}>
+            <View>
+              <Text style={styles.bottomTimeRange}>
+                {formatTime12(selectedStart.time)} – {minsToTime12(endMins)}
               </Text>
-            )}
+              <Text style={styles.bottomDuration}>
+                {selectedDuration >= 60
+                  ? `${Math.floor(selectedDuration / 60)}h${selectedDuration % 60 > 0 ? ` ${selectedDuration % 60}m` : ''}`
+                  : `${selectedDuration}m`}
+              </Text>
+            </View>
+            <View style={styles.bottomPriceCol}>
+              {pricing.is_free ? (
+                <Text style={styles.bottomPriceFree}>Free</Text>
+              ) : (
+                <Text style={styles.bottomPrice}>${pricing.final_price.toFixed(2)}</Text>
+              )}
+              {pricing.discount_amount > 0 && !pricing.is_free && (
+                <Text style={styles.bottomDiscount}>
+                  {Math.round((pricing.discount_amount / pricing.base_price) * 100)}% off
+                </Text>
+              )}
+            </View>
           </View>
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color="#ffffff" />
+            <Ionicons name="arrow-forward" size={18} color={colors.white} />
           </TouchableOpacity>
         </View>
       )}
@@ -403,143 +360,95 @@ export default function BookCourtScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', paddingTop: 60 },
-  centered: {
-    flex: 1,
+  container: { flex: 1, backgroundColor: colors.white, paddingTop: 60 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white },
+  header: { paddingHorizontal: layout.screenPaddingH, marginBottom: spacing.base },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.base },
+  backText: { fontSize: fontSizes.base, color: colors.primary, fontWeight: fontWeights.semibold },
+  title: { fontSize: fontSizes.xl, fontWeight: fontWeights.heavy, color: colors.neutral900 },
+  subtitle: { fontSize: fontSizes.base, color: colors.neutral500, marginTop: spacing.xs },
+
+  mainScroll: { flex: 1 },
+  mainContent: { paddingHorizontal: layout.screenPaddingH },
+
+  sectionLabel: {
+    fontSize: fontSizes.sm, fontWeight: fontWeights.bold, color: colors.neutral400,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: spacing.md, marginTop: spacing.xs,
+  },
+
+  // Duration chips
+  durationRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
+  durationChip: {
+    flex: 1, paddingVertical: spacing.md, borderRadius: borderRadius.md,
+    backgroundColor: colors.white, borderWidth: 1.5, borderColor: colors.neutral200,
+    alignItems: 'center',
+  },
+  durationChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  durationChipDisabled: { opacity: 0.35 },
+  durationText: { fontSize: fontSizes.base, fontWeight: fontWeights.bold, color: colors.neutral600 },
+  durationTextActive: { color: colors.white },
+  durationTextDisabled: { color: colors.neutral400 },
+
+  // Slot grid
+  slotGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm,
+  },
+  slotCell: {
+    width: '31%',
+    paddingVertical: 14,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.white,
+    borderWidth: 1.5,
+    borderColor: colors.neutral200,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8fafc',
   },
-  header: { paddingHorizontal: 20, marginBottom: 12 },
-  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
-  backText: { fontSize: 16, color: '#2563eb', fontWeight: '600' },
-  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
-  subtitle: { fontSize: 15, color: '#64748b', marginTop: 4 },
+  slotCellSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  slotCellDisabled: {
+    backgroundColor: colors.white,
+    borderColor: colors.neutral100,
+  },
+  slotCellDimmed: {
+    opacity: 0.4,
+  },
+  slotCellTime: { fontSize: 14, fontWeight: fontWeights.semibold, color: colors.neutral900 },
+  slotCellTimeSelected: { color: colors.white },
+  slotCellTimeDisabled: { color: colors.neutral300 },
+  slotCellTimeDimmed: { color: colors.neutral400 },
+  bookedLabel: { fontSize: 9, fontWeight: fontWeights.semibold, color: colors.error, marginTop: 2 },
+  demandDot: { width: 6, height: 6, borderRadius: 3, marginTop: spacing.xs },
 
-  instructionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    backgroundColor: '#eff6ff',
-    padding: 12,
-    borderRadius: 10,
-  },
-  instructionText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
-
-  nudgeBanner: {
-    marginHorizontal: 20,
-    marginBottom: 8,
-    backgroundColor: '#fff7ed',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-  },
-  nudgeText: {
-    fontSize: 13,
-    color: '#c2410c',
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  slotsScroll: { flex: 1 },
-  slotsContent: { paddingHorizontal: 20, paddingBottom: 20 },
-
-  slotRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  slotDefault: {
-    backgroundColor: '#ffffff',
-    borderColor: '#f1f5f9',
-  },
-  slotPast: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0',
-    opacity: 0.5,
-  },
-  slotBooked: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fecaca',
-  },
-  slotStart: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
-  },
-  slotInRange: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-  },
-
-  slotTime: { fontSize: 16, fontWeight: '600', flex: 1 },
-  slotTimeDefault: { color: '#1e293b' },
-  slotTimePast: { color: '#cbd5e1' },
-  slotTimeBooked: { color: '#dc2626' },
-  slotTimeSelected: { color: '#ffffff' },
-
-  slotSublabel: { fontSize: 12, fontWeight: '600', color: '#94a3b8' },
-  slotSublabelBooked: { color: '#dc2626' },
-
-  selectedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ffffff',
-  },
-
-  emptyState: { alignItems: 'center', paddingVertical: 60, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  emptySubtitle: { fontSize: 14, color: '#94a3b8', textAlign: 'center' },
+  // Empty state
+  emptyState: { alignItems: 'center', paddingVertical: 60, gap: spacing.sm },
+  emptyTitle: { fontSize: fontSizes.base, fontWeight: fontWeights.semibold, color: colors.neutral900 },
+  emptySubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },
 
   // Bottom bar
   bottomBar: {
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 34,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: colors.white,
+    borderTopWidth: 1, borderTopColor: colors.neutral100,
+    paddingHorizontal: layout.screenPaddingH, paddingTop: spacing.base, paddingBottom: 34,
   },
-  bottomInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+  bottomSummary: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  bottomTimeRange: { fontSize: 15, fontWeight: '600', color: '#1e293b' },
-  bottomDuration: { fontSize: 13, color: '#64748b' },
-  bottomPriceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-  },
-  bottomPrice: { fontSize: 22, fontWeight: '700', color: '#2563eb' },
-  bottomPriceFree: { fontSize: 22, fontWeight: '700', color: '#15803d' },
+  bottomTimeRange: { fontSize: fontSizes.md, fontWeight: fontWeights.bold, color: colors.neutral900 },
+  bottomDuration: { fontSize: fontSizes.sm, color: colors.neutral500, marginTop: 2 },
+  bottomPriceCol: { alignItems: 'flex-end' },
+  bottomPrice: { fontSize: 22, fontWeight: fontWeights.heavy, color: colors.primary },
+  bottomPriceFree: { fontSize: 22, fontWeight: fontWeights.heavy, color: colors.success },
   bottomDiscount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2563eb',
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    fontSize: fontSizes.xs, fontWeight: fontWeights.semibold, color: colors.primary,
+    backgroundColor: colors.primaryMuted, paddingHorizontal: 6, paddingVertical: 2, borderRadius: borderRadius.sm, marginTop: 2,
   },
   continueButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 14,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    backgroundColor: colors.primary, borderRadius: borderRadius.lg, padding: spacing.base,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
   },
-  continueText: { color: '#ffffff', fontSize: 17, fontWeight: '700' },
+  continueText: { color: colors.white, fontSize: fontSizes.md, fontWeight: fontWeights.bold },
 })

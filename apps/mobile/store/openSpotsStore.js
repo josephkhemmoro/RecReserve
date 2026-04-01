@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
+import { toLocalISO } from '../lib/dateUtils'
 
 export const useOpenSpotsStore = create((set, get) => ({
   openSpots: [],
@@ -14,7 +15,7 @@ export const useOpenSpotsStore = create((set, get) => ({
     if (!clubId) return
     set({ isLoading: true, error: null })
     try {
-      const now = new Date().toISOString()
+      const now = toLocalISO(new Date())
 
       const { data, error } = await supabase
         .from('open_spots')

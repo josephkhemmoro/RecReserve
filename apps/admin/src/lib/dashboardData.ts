@@ -1,4 +1,5 @@
 import { createClient } from "@/utils/supabase/client";
+import { localDateStr, localDayStart, localDayEnd } from "@/lib/dateUtils";
 
 export interface TrendData {
   courtUtilization: number[];
@@ -31,13 +32,14 @@ export interface CourtRevenue {
 }
 
 function getDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+  return localDateStr(d);
 }
 
 function getDayBounds(dateStr: string): { start: string; end: string } {
+  const d = new Date(dateStr + "T00:00:00");
   return {
-    start: `${dateStr}T00:00:00`,
-    end: `${dateStr}T23:59:59`,
+    start: localDayStart(d),
+    end: localDayEnd(d),
   };
 }
 
@@ -291,8 +293,10 @@ export async function getRevenueByCourtData(
 ): Promise<CourtRevenue[]> {
   const supabase = createClient();
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+  const monthStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const monthStart = localDayStart(monthStartDate);
+  const monthEnd = localDayEnd(monthEndDate);
 
   try {
     const [courtsRes, resRes] = await Promise.all([
