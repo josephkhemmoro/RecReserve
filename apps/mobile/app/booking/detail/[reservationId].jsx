@@ -4,11 +4,11 @@ import {
   ActivityIndicator, Alert,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { supabase } from '../../lib/supabase'
-import { useAuthStore } from '../../store/authStore'
-import { useClubStore } from '../../store/clubStore'
-import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
-import { Icon, Badge } from '../../components/ui'
+import { supabase } from '../../../lib/supabase'
+import { useAuthStore } from '../../../store/authStore'
+import { useClubStore } from '../../../store/clubStore'
+import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../../theme'
+import { Icon, Badge } from '../../../components/ui'
 
 export default function ReservationDetailScreen() {
   const { reservationId } = useLocalSearchParams()

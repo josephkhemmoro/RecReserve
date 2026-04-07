@@ -18,23 +18,38 @@ export default function PlayerProfileScreen() {
   const [streak, setStreak] = useState(null)
   const [kudosCount, setKudosCount] = useState(0)
   const [milestones, setMilestones] = useState([])
+  const [attendanceRate, setAttendanceRate] = useState(null)
+  const [topPartners, setTopPartners] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!userId || !selectedClub?.id) return
     const load = async () => {
       try {
-        const [userRes, streakRes, kudosRes, milestonesRes] = await Promise.all([
+        const [userRes, streakRes, kudosRes, milestonesRes, attendanceRes, partnersRes] = await Promise.all([
           supabase.from('users').select('id, full_name, avatar_url, created_at').eq('id', userId).single(),
           supabase.from('player_streaks').select('*').eq('user_id', userId).eq('club_id', selectedClub.id).single(),
           supabase.from('kudos').select('id', { count: 'exact', head: true }).eq('receiver_id', userId).eq('club_id', selectedClub.id),
           supabase.from('streak_milestones').select('*').eq('user_id', userId).eq('club_id', selectedClub.id).order('achieved_at', { ascending: false }),
+          supabase.from('reservations').select('status').eq('user_id', userId).eq('club_id', selectedClub.id).in('status', ['completed', 'no_show']),
+          supabase.from('play_connections').select('partner_id, times_played, partner:users!play_connections_partner_id_fkey(full_name, avatar_url)').eq('user_id', userId).eq('club_id', selectedClub.id).eq('is_blocked', false).order('times_played', { ascending: false }).limit(3),
         ])
 
         setPlayer(userRes.data)
         setStreak(streakRes.data)
         setKudosCount(kudosRes.count || 0)
         setMilestones(milestonesRes.data || [])
+
+        // Calculate attendance rate
+        const attendanceData = attendanceRes.data || []
+        if (attendanceData.length > 0) {
+          const completed = attendanceData.filter((r) => r.status === 'completed').length
+          const rate = Math.round((completed / attendanceData.length) * 100)
+          setAttendanceRate(rate)
+        }
+
+        // Set top partners
+        setTopPartners(partnersRes.data || [])
       } catch (err) {
         console.error('Error loading player:', err)
       } finally {
@@ -95,6 +110,11 @@ export default function PlayerProfileScreen() {
             <Text style={styles.statValue}>{kudosCount}</Text>
             <Text style={styles.statLabel}>Kudos</Text>
           </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{attendanceRate !== null ? `${attendanceRate}%` : '--'}</Text>
+            <Text style={styles.statLabel}>Reliability</Text>
+          </View>
         </View>
 
         {/* Milestones */}
@@ -107,6 +127,22 @@ export default function PlayerProfileScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.milestoneName}>{MILESTONE_LABELS[m.milestone] || `${m.milestone} weeks`}</Text>
                   <Text style={styles.milestoneDate}>{new Date(m.achieved_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Frequent Partners */}
+        {topPartners.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Frequent Partners</Text>
+            {topPartners.map((p) => (
+              <View key={p.partner_id} style={styles.partnerRow}>
+                <Avatar uri={p.partner?.avatar_url} name={p.partner?.full_name} size="sm" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.partnerName}>{p.partner?.full_name || 'Unknown'}</Text>
+                  <Text style={styles.partnerPlays}>{p.times_played} {p.times_played === 1 ? 'game' : 'games'} together</Text>
                 </View>
               </View>
             ))}
@@ -144,4 +180,10 @@ const styles = StyleSheet.create({
   milestoneIcon: { fontSize: 24 },
   milestoneName: { fontSize: 14, fontWeight: '600', color: colors.neutral900 },
   milestoneDate: { fontSize: 12, color: colors.neutral500, marginTop: 2 },
+  partnerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.neutral50, borderRadius: borderRadius.md, padding: spacing.md, marginBottom: spacing.sm,
+  },
+  partnerName: { fontSize: 14, fontWeight: '600', color: colors.neutral900 },
+  partnerPlays: { fontSize: 12, color: colors.neutral500, marginTop: 2 },
 })

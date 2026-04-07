@@ -18,6 +18,7 @@ import { useBookingStore } from '../../store/bookingStore'
 import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
 import { useStreakStore } from '../../store/streakStore'
+import { useAnalyticsStore } from '../../store/analyticsStore'
 import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 
 
@@ -194,8 +195,10 @@ export default function BookingConfirmScreen() {
         useStreakStore.getState().triggerStreakUpdate(user.id, selectedClub.id).catch(() => {})
       }
 
-      clearBooking()
+      useAnalyticsStore.getState().trackBookingCompleted(user?.id, selectedClub?.id, selectedCourt?.id)
       router.replace('/booking/success')
+      // Clear booking AFTER navigation to avoid flash of empty state
+      setTimeout(() => clearBooking(), 500)
     } catch (err) {
       setError(err.message || 'Something went wrong')
     } finally {

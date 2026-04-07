@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { colors, spacing, borderRadius, shadows } from '../../theme'
 import { Icon, Avatar, Badge, Button } from '../../components/ui'
+import { useAnalyticsStore } from '../../store/analyticsStore'
 
 const FORMAT_LABELS = { singles: 'Singles', doubles: 'Doubles', mixed_doubles: 'Mixed', social: 'Social', round_robin: 'Round Robin' }
 const FORMAT_ICONS = { singles: 'person-outline', doubles: 'people-outline', mixed_doubles: 'people-outline', social: 'happy-outline', round_robin: 'sync-outline' }
@@ -73,6 +74,7 @@ export default function GamesScreen() {
           }
         }
         fetchGames()
+        useAnalyticsStore.getState().trackGameJoined(user.id, selectedClub?.id, gameId)
       }
     } catch (err) { Alert.alert('Error', err.message || 'Failed to join') }
     finally { setJoining(null) }

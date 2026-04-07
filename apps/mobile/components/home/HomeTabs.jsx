@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, textStyles, spacing } from '../../theme'
 
-const TABS = ['About', 'Book', 'Memberships', 'Events']
+const TABS = ['About', 'Book', 'Play', 'Memberships', 'Events']
 
 export function HomeTabs({ activeTab, onChangeTab }) {
   return (

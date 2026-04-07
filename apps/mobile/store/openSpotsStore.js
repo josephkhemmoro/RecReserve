@@ -271,10 +271,14 @@ export const useOpenSpotsStore = create((set, get) => ({
 
   respondToRequest: async (requestId, status, spotOwnerName) => {
     try {
-      // Get the request first for requester_id and spot info
+      // Get the request with spot and reservation details
       const { data: reqData } = await supabase
         .from('spot_requests')
-        .select('requester_id, open_spot_id, open_spot:open_spots(club_id)')
+        .select(`
+          requester_id,
+          open_spot_id,
+          open_spot:open_spots(club_id, reservation_id, reservation:reservations(id, court_id, club_id, start_time, end_time))
+        `)
         .eq('id', requestId)
         .single()
 
@@ -285,7 +289,7 @@ export const useOpenSpotsStore = create((set, get) => ({
 
       if (updateError) throw updateError
 
-      // Notify requester
+      // Notify requester with in-app notification + push
       if (reqData?.requester_id) {
         const title = status === 'accepted' ? "You're in! 🎾" : 'Spot update'
         const body = status === 'accepted'
@@ -294,6 +298,7 @@ export const useOpenSpotsStore = create((set, get) => ({
         const type = status === 'accepted' ? 'spot_accepted' : 'spot_declined'
 
         try {
+          // In-app notification
           await supabase.from('notifications').insert({
             user_id: reqData.requester_id,
             club_id: reqData.open_spot?.club_id || null,
@@ -302,8 +307,48 @@ export const useOpenSpotsStore = create((set, get) => ({
             type,
             read: false,
           })
+
+          // Push notification
+          const { data: requesterUser } = await supabase
+            .from('users')
+            .select('push_token')
+            .eq('id', reqData.requester_id)
+            .single()
+
+          if (requesterUser?.push_token) {
+            await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: requesterUser.push_token,
+                title,
+                body,
+                sound: 'default',
+                data: { type, open_spot_id: reqData.open_spot_id },
+              }),
+            })
+          }
         } catch (notifErr) {
           console.warn('Response notification failed:', notifErr)
+        }
+      }
+
+      // If accepted, add the requester to the linked reservation as a guest booking
+      if (status === 'accepted' && reqData?.open_spot?.reservation) {
+        const res = reqData.open_spot.reservation
+        try {
+          // Use SECURITY DEFINER function to bypass RLS (owner inserting for another user)
+          const { error: rpcErr } = await supabase.rpc('create_guest_reservation', {
+            p_court_id: res.court_id,
+            p_user_id: reqData.requester_id,
+            p_club_id: res.club_id,
+            p_start_time: res.start_time,
+            p_end_time: res.end_time,
+            p_notes: `Joined via open spot (host: ${spotOwnerName})`,
+          })
+          if (rpcErr) console.warn('Guest reservation RPC error:', rpcErr)
+        } catch (bookErr) {
+          console.warn('Failed to create guest reservation:', bookErr)
         }
       }
 

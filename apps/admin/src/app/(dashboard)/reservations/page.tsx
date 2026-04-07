@@ -128,6 +128,10 @@ export default function ReservationsPage() {
         cancelled_by: admin?.userId,
       }).eq("id", id);
 
+      // Clean up open spots and participants for this reservation
+      await supabase.from("open_spots").delete().eq("reservation_id", id);
+      await supabase.from("reservation_participants").delete().eq("reservation_id", id);
+
       // Audit log
       if (admin?.userId && admin?.clubId) {
         await supabase.from("audit_logs").insert({

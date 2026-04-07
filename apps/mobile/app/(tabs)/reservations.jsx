@@ -38,6 +38,8 @@ export default function ReservationsScreen() {
   const { sentKudosReservationIds, fetchSentKudosIds } = useKudosStore()
   const { mySpots, fetchMySpots } = useOpenSpotsStore()
   const [spotModalReservation, setSpotModalReservation] = useState(null)
+  const [participants, setParticipants] = useState({}) // { reservationId: [{ id, user_id, full_name, avatar_url }] }
+  const [expandedParticipants, setExpandedParticipants] = useState(null)
   const postedReservationIds = new Set(mySpots.filter((s) => s.is_active).map((s) => s.reservation_id))
 
   const fetchData = useCallback(async () => {
@@ -52,6 +54,7 @@ export default function ReservationsScreen() {
     try {
       const now = toLocalISO(new Date())
 
+      // Fetch own reservations
       let query = supabase
         .from('reservations')
         .select('*, court:courts(name)')
@@ -69,18 +72,58 @@ export default function ReservationsScreen() {
           .order('start_time', { ascending: false })
       }
 
-      const requests = [query]
-      requests.push(
-        supabase.from('booking_rules').select('*').eq('club_id', selectedClub.id).single()
-      )
+      // Also fetch reservations where user is a participant (joined via open spots, invites)
+      const participantQuery = supabase
+        .from('reservation_participants')
+        .select('reservation_id')
+        .eq('user_id', user.id)
 
-      const results = await Promise.all(requests)
-      const resResult = results[0]
+      const [resResult, rulesResult, participantResult] = await Promise.all([
+        query,
+        supabase.from('booking_rules').select('*').eq('club_id', selectedClub.id).single(),
+        participantQuery,
+      ])
 
       if (resResult.error) throw resResult.error
-      setReservations(resResult.data || [])
 
-      if (results[1] && !results[1].error) setBookingRules(results[1].data)
+      // Fetch the actual reservations for participant entries
+      const participantResIds = (participantResult.data || []).map((p) => p.reservation_id).filter(Boolean)
+      let participantReservations = []
+      if (participantResIds.length > 0) {
+        const { data: partRes } = await supabase
+          .from('reservations')
+          .select('*, court:courts(name)')
+          .in('id', participantResIds)
+          .eq('club_id', selectedClub.id)
+        participantReservations = (partRes || []).map((r) => ({ ...r, is_participant: true }))
+      }
+
+      // Merge own reservations with participant reservations (deduplicate by id)
+      const ownReservations = resResult.data || []
+
+      const seenIds = new Set(ownReservations.map((r) => r.id))
+      const merged = [...ownReservations]
+      for (const pr of participantReservations) {
+        if (!seenIds.has(pr.id)) {
+          // Filter by tab
+          if (activeTab === 'Scheduled') {
+            if (pr.status === 'confirmed' && pr.start_time >= now) merged.push(pr)
+          } else {
+            if (pr.status !== 'confirmed' || pr.start_time < now) merged.push(pr)
+          }
+          seenIds.add(pr.id)
+        }
+      }
+
+      // Sort
+      if (activeTab === 'Scheduled') {
+        merged.sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+      } else {
+        merged.sort((a, b) => new Date(b.start_time) - new Date(a.start_time))
+      }
+
+      setReservations(merged)
+      if (rulesResult && !rulesResult.error) setBookingRules(rulesResult.data)
     } catch (err) {
       console.error('Error fetching reservations:', err)
     } finally {
@@ -192,6 +235,119 @@ export default function ReservationsScreen() {
     }
   }
 
+  const handleLeaveReservation = (reservation) => {
+    Alert.alert('Leave Booking', 'Are you sure you want to leave this court session?', [
+      { text: 'Stay', style: 'cancel' },
+      {
+        text: 'Leave', style: 'destructive', onPress: async () => {
+          setCancellingId(reservation.id)
+          try {
+            const { error: rpcErr } = await supabase.rpc('leave_reservation', {
+              p_reservation_id: reservation.id,
+              p_user_id: user.id,
+            })
+            if (rpcErr) console.warn('Leave RPC error:', rpcErr)
+
+            fetchData()
+          } catch (err) {
+            Alert.alert('Error', 'Failed to leave. Please try again.')
+          } finally {
+            setCancellingId(null)
+          }
+        },
+      },
+    ])
+  }
+
+  const fetchParticipants = async (reservationId) => {
+    if (expandedParticipants === reservationId) {
+      setExpandedParticipants(null)
+      return
+    }
+    try {
+      const { data } = await supabase
+        .from('reservation_participants')
+        .select('id, user_id')
+        .eq('reservation_id', reservationId)
+
+      // Fetch user names separately (FK goes to auth.users, not public.users)
+      const userIds = (data || []).map((p) => p.user_id).filter(Boolean)
+      let nameMap = {}
+      if (userIds.length > 0) {
+        const { data: users } = await supabase.from('users').select('id, full_name, avatar_url').in('id', userIds)
+        for (const u of users || []) nameMap[u.id] = { full_name: u.full_name, avatar_url: u.avatar_url }
+      }
+
+      setParticipants((prev) => ({
+        ...prev,
+        [reservationId]: (data || []).map((p) => ({
+          id: p.id,
+          user_id: p.user_id,
+          full_name: nameMap[p.user_id]?.full_name || 'Player',
+          avatar_url: nameMap[p.user_id]?.avatar_url || null,
+        })),
+      }))
+      setExpandedParticipants(reservationId)
+    } catch (err) {
+      console.error('Error fetching participants:', err)
+    }
+  }
+
+  const cleanupSpotRequestForUser = async (reservationId, removedUserId) => {
+    try {
+      // Find the open spot for this reservation
+      const { data: spots } = await supabase
+        .from('open_spots')
+        .select('id')
+        .eq('reservation_id', reservationId)
+        .limit(1)
+
+      if (spots && spots.length > 0) {
+        const spotId = spots[0].id
+
+        // Delete or reset the spot request for the removed user
+        await supabase
+          .from('spot_requests')
+          .delete()
+          .eq('open_spot_id', spotId)
+          .eq('requester_id', removedUserId)
+
+        // Re-activate the open spot so new players can join
+        await supabase
+          .from('open_spots')
+          .update({ is_active: true })
+          .eq('id', spotId)
+      }
+    } catch (err) {
+      console.warn('Spot request cleanup failed:', err)
+    }
+  }
+
+  const handleRemoveParticipant = (reservationId, participantId, participantName) => {
+    // Find the user_id for this participant
+    const participant = (participants[reservationId] || []).find((p) => p.id === participantId)
+    Alert.alert('Remove Player', `Remove ${participantName} from this session?`, [
+      { text: 'Keep', style: 'cancel' },
+      {
+        text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            const { error: rpcErr } = await supabase.rpc('leave_reservation', {
+              p_reservation_id: reservationId,
+              p_user_id: participant?.user_id,
+            })
+            if (rpcErr) console.warn('Remove RPC error:', rpcErr)
+
+            fetchParticipants(reservationId) // refresh
+            setExpandedParticipants(reservationId) // keep open
+            fetchData() // refresh card guest count
+          } catch (err) {
+            Alert.alert('Error', 'Failed to remove player.')
+          }
+        },
+      },
+    ])
+  }
+
   const formatDate = (dateStr) =>
     new Date(dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
@@ -250,6 +406,13 @@ export default function ReservationsScreen() {
           <View style={styles.cardInfo}>
             <View style={styles.nameRow}>
               <Text style={styles.courtName}>{item.court?.name || 'Court'}</Text>
+              {item.is_participant && (
+                <View style={[styles.recurringBadge, { backgroundColor: '#f0fdf4' }]}>
+                  <Text style={[styles.recurringBadgeText, { color: '#16a34a' }]}>
+                    Joined
+                  </Text>
+                </View>
+              )}
               {seriesInfo && (
                 <View style={styles.recurringBadge}>
                   <Text style={styles.recurringBadgeText}>
@@ -274,7 +437,25 @@ export default function ReservationsScreen() {
           </View>
         </View>
 
-        {activeTab === 'Scheduled' && (
+        {activeTab === 'Scheduled' && item.is_participant && (
+          <View style={styles.cardFooter}>
+            <View style={styles.cardFooterRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => handleLeaveReservation(item)}
+                disabled={cancellingId === item.id}
+              >
+                {cancellingId === item.id ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Text style={styles.cancelButtonText}>Leave</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {activeTab === 'Scheduled' && !item.is_participant && (
           <View style={styles.cardFooter}>
             <View style={styles.cardFooterRow}>
               {cancelable ? (
@@ -315,6 +496,36 @@ export default function ReservationsScreen() {
                 </TouchableOpacity>
               )}
             </View>
+          </View>
+        )}
+
+        {activeTab === 'Scheduled' && !item.is_participant && item.guest_count > 0 && (
+          <View style={styles.participantsSection}>
+            <TouchableOpacity
+              style={styles.participantsToggle}
+              onPress={() => fetchParticipants(item.id)}
+            >
+              <Icon name="people-outline" size="sm" color={colors.neutral600} />
+              <Text style={styles.participantsToggleText}>
+                {item.guest_count} player{item.guest_count > 1 ? 's' : ''} joined
+              </Text>
+              <Icon name={expandedParticipants === item.id ? 'chevron-up' : 'chevron-down'} size="sm" color={colors.neutral400} />
+            </TouchableOpacity>
+            {expandedParticipants === item.id && (
+              <View style={styles.participantsList}>
+                {(participants[item.id] || []).map((p) => (
+                  <View key={p.id} style={styles.participantRow}>
+                    <Text style={styles.participantName}>{p.full_name}</Text>
+                    <TouchableOpacity onPress={() => handleRemoveParticipant(item.id, p.id, p.full_name)}>
+                      <Text style={styles.removeText}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {(participants[item.id] || []).length === 0 && (
+                  <Text style={styles.noParticipants}>No participants found</Text>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -440,4 +651,12 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing['3xl'] },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.neutral900, marginBottom: spacing.sm },
   emptySubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },
+  participantsSection: { marginTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.neutral100, paddingTop: spacing.sm },
+  participantsToggle: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, justifyContent: 'center', paddingVertical: spacing.xs },
+  participantsToggleText: { fontSize: 13, fontWeight: '600', color: colors.neutral600 },
+  participantsList: { marginTop: spacing.sm },
+  participantRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.neutral100 },
+  participantName: { fontSize: 14, fontWeight: '600', color: colors.neutral900 },
+  removeText: { fontSize: 13, fontWeight: '600', color: colors.error },
+  noParticipants: { fontSize: 13, color: colors.neutral400, textAlign: 'center', paddingVertical: spacing.md },
 })

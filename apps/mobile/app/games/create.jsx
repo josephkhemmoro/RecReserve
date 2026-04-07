@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 import { Icon, Button } from '../../components/ui'
+import { useAnalyticsStore } from '../../store/analyticsStore'
 
 const FORMATS = [
   { value: 'doubles', label: 'Doubles', icon: 'people-outline', players: 4 },
@@ -77,6 +78,7 @@ export default function CreateGameScreen() {
         metadata: { game_id: game.id, sport, format, skill_level: skill, date },
       }).catch(() => {})
 
+      useAnalyticsStore.getState().trackGameCreated(user.id, selectedClub.id, game.id, format, sport)
       router.replace('/games')
     } catch (err) { Alert.alert('Error', err.message || 'Failed to create game') }
     finally { setSaving(false) }

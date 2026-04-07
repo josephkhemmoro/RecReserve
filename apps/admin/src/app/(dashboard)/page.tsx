@@ -66,6 +66,7 @@ export default function DashboardPage() {
   const [revenueData, setRevenueData] = useState<CourtRevenue[]>([]);
   const [markingNoShow, setMarkingNoShow] = useState<string | null>(null);
   const [setupChecklist, setSetupChecklist] = useState<{ courts: boolean; tiers: boolean; rules: boolean; stripe: boolean } | null>(null);
+  const [socialStats, setSocialStats] = useState({ gamesCreated: 0, gamesFilled: 0, groupsActive: 0, gameParticipants: 0 });
 
   const fetchDashboard = useCallback(async (clubId: string) => {
     const supabase = createClient();
@@ -169,6 +170,18 @@ export default function DashboardPage() {
       setStats((prev) =>
         prev ? { ...prev, courtUtilization: occData.occupancyPercent } : prev
       );
+
+      // Social stats
+      try {
+        const weekAgoDate = new Date(Date.now() - 7 * 86400000).toISOString();
+        const [gcRes, gfRes, gaRes, gpRes] = await Promise.all([
+          supabase.from("open_games").select("id", { count: "exact", head: true }).eq("club_id", clubId).gte("created_at", weekAgoDate),
+          supabase.from("open_games").select("id", { count: "exact", head: true }).eq("club_id", clubId).in("status", ["full", "confirmed", "completed"]).gte("created_at", weekAgoDate),
+          supabase.from("play_groups").select("id", { count: "exact", head: true }).eq("club_id", clubId).eq("is_active", true),
+          supabase.from("game_participants").select("id", { count: "exact", head: true }).eq("status", "joined").gte("joined_at", weekAgoDate),
+        ]);
+        setSocialStats({ gamesCreated: gcRes.count ?? 0, gamesFilled: gfRes.count ?? 0, groupsActive: gaRes.count ?? 0, gameParticipants: gpRes.count ?? 0 });
+      } catch {}
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -423,6 +436,14 @@ export default function DashboardPage() {
             <StatCard label="No-Shows Today" value={String(stats?.noShowsToday ?? 0)} sparklineData={trends?.noShows} trend={getTrend(trends?.noShows)} />
           </>
         )}
+      </div>
+
+      {/* Social Activity */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Games Created (7d)" value={socialStats.gamesCreated} />
+        <StatCard label="Games Filled (7d)" value={socialStats.gamesFilled} />
+        <StatCard label="Active Groups" value={socialStats.groupsActive} />
+        <StatCard label="Game Joins (7d)" value={socialStats.gameParticipants} />
       </div>
 
       {/* Court Occupancy Heat Map */}

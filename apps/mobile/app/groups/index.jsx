@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { colors, spacing, borderRadius, shadows } from '../../theme'
 import { Icon, Avatar, Badge, Button } from '../../components/ui'
+import { useAnalyticsStore } from '../../store/analyticsStore'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -51,7 +52,10 @@ export default function GroupsScreen() {
     try {
       const { error } = await supabase.from('play_group_members').insert({ group_id: groupId, user_id: user.id, role: 'member', status: 'active' })
       if (error) { if (error.code === '23505') Alert.alert('Already a Member'); else throw error }
-      else fetchGroups()
+      else {
+        fetchGroups()
+        useAnalyticsStore.getState().trackGroupJoined(user.id, selectedClub?.id, groupId)
+      }
     } catch (err) { Alert.alert('Error', err.message || 'Failed to join') }
     finally { setJoining(null) }
   }
