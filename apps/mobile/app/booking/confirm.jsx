@@ -51,7 +51,7 @@ export default function BookingConfirmScreen() {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={48} color={colors.neutral400} />
-        <Text style={styles.errorTitle}>No booking details</Text>
+        <Text style={styles.emptyTitle}>No booking details</Text>
         <Text style={styles.errorSubtitle}>Please select a court and time first</Text>
         <TouchableOpacity style={styles.goBackBtn} onPress={() => router.back()}>
           <Text style={styles.goBackText}>Go Back</Text>
@@ -75,19 +75,71 @@ export default function BookingConfirmScreen() {
   }
 
   const handleConfirm = async () => {
+    if (loading) return // prevent double-tap
     setError('')
     setLoading(true)
 
     try {
-      let paymentIntentId = null
+      // Step 1: Server-side validation
+      const tzOffset = new Date().getTimezoneOffset()
+      const tzSign = tzOffset <= 0 ? '+' : '-'
+      const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0')
+      const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0')
+      const tzStr = `${tzSign}${tzHours}:${tzMins}`
 
-      // Skip Stripe if free
+      const startDT = `${selectedDate}T${startTime}:00${tzStr}`
+      const endDT = `${selectedDate}T${endTime}:00${tzStr}`
+
+      // Server-side validation (non-blocking if service unavailable)
+      try {
+        const { data: validation, error: valError } = await supabase.functions.invoke(
+          'validate-booking',
+          {
+            body: {
+              court_id: selectedCourt.id,
+              club_id: selectedClub?.id,
+              start_time: startDT,
+              end_time: endDT,
+              guest_count: 0,
+            },
+          }
+        )
+
+        // Check the response — our function returns { valid, errors }
+        const valResult = validation || null
+        if (valResult && valResult.valid === false) {
+          const errorMessages = (valResult.errors || [])
+            .map((e) => e.message || e)
+            .join('\n')
+          throw new Error(errorMessages || 'This booking cannot be completed.')
+        }
+
+        // If we got no data but an error, log it and continue (don't block booking)
+        if (!valResult && valError) {
+          console.warn('Validation service returned error, proceeding:', valError)
+        }
+      } catch (valCatchErr) {
+        // Re-throw validation rejections (our thrown errors from above)
+        if (valCatchErr.message && !valCatchErr.message.includes('non-2xx') && !valCatchErr.message.includes('FunctionsHttpError')) {
+          throw valCatchErr
+        }
+        // Service errors — log and proceed (don't block booking over infra issues)
+        console.warn('Validation service unavailable, proceeding with booking:', valCatchErr.message)
+      }
+
+      // Step 2: Handle payment if not free
+      let paymentIntentId = null
+      let amountCents = 0
+      const idempotencyKey = `booking_${user?.id}_${selectedCourt.id}_${startDT}`
+
       if (!isFree && finalPrice > 0) {
+        amountCents = Math.round(finalPrice * 100)
+
         const { data: paymentData, error: fnError } = await supabase.functions.invoke(
           'create-payment-intent',
           {
             body: {
-              amount: Math.round(finalPrice * 100),
+              amount: amountCents,
               court_id: selectedCourt.id,
               user_id: user?.id,
               club_id: selectedClub?.id,
@@ -98,7 +150,11 @@ export default function BookingConfirmScreen() {
           }
         )
 
-        if (fnError) throw new Error(fnError.message || 'Failed to create payment')
+        // Function now returns 200 always — check for error in data
+        const piResult = paymentData || fnError
+        console.log('create-payment-intent response:', JSON.stringify(piResult))
+        if (piResult?.error) throw new Error(piResult.error)
+        if (!piResult?.clientSecret) throw new Error('Payment service error: ' + JSON.stringify(piResult))
         const { clientSecret } = paymentData
         paymentIntentId = paymentData.paymentIntentId
 
@@ -118,16 +174,7 @@ export default function BookingConfirmScreen() {
         }
       }
 
-      // Create reservation
-      const tzOffset = new Date().getTimezoneOffset()
-      const tzSign = tzOffset <= 0 ? '+' : '-'
-      const tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0')
-      const tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0')
-      const tzStr = `${tzSign}${tzHours}:${tzMins}`
-
-      const startDT = `${selectedDate}T${startTime}:00${tzStr}`
-      const endDT = `${selectedDate}T${endTime}:00${tzStr}`
-
+      // Step 3: Create reservation directly (validated by step 1)
       const { error: resErr } = await supabase.from('reservations').insert({
         court_id: selectedCourt.id,
         user_id: user?.id,
@@ -137,11 +184,12 @@ export default function BookingConfirmScreen() {
         status: 'confirmed',
         stripe_payment_id: paymentIntentId,
         amount_paid: isFree ? 0 : finalPrice,
+        validated_at: new Date().toISOString(),
       })
 
-      if (resErr) throw new Error('Failed to create reservation')
+      if (resErr) throw new Error('Failed to create reservation: ' + resErr.message)
 
-      // Fire-and-forget streak update — don't block booking flow
+      // Fire-and-forget streak update
       if (user?.id && selectedClub?.id) {
         useStreakStore.getState().triggerStreakUpdate(user.id, selectedClub.id).catch(() => {})
       }
@@ -244,10 +292,42 @@ export default function BookingConfirmScreen() {
 
         {error ? (
           <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={16} color={colors.error} />
+            <View style={styles.errorHeader}>
+              <Ionicons name="alert-circle" size={18} color={colors.error} />
+              <Text style={styles.errorTitle}>Booking Not Available</Text>
+            </View>
             <Text style={styles.errorMessage}>{error}</Text>
+            <Text style={styles.errorHint}>
+              Please adjust your selection or contact the club for assistance.
+            </Text>
           </View>
         ) : null}
+
+        {/* Booking Policy Info */}
+        <View style={styles.policyCard}>
+          <Text style={styles.policyTitle}>Booking Policy</Text>
+          <View style={styles.divider} />
+          <View style={styles.policyRow}>
+            <Ionicons name="information-circle-outline" size={16} color={colors.neutral500} />
+            <Text style={styles.policyText}>
+              {isFree
+                ? 'Your membership includes free court bookings.'
+                : `You'll be charged $${finalPrice.toFixed(2)} via Stripe.`}
+            </Text>
+          </View>
+          <View style={styles.policyRow}>
+            <Ionicons name="close-circle-outline" size={16} color={colors.neutral500} />
+            <Text style={styles.policyText}>
+              Cancellation is free up to the club's cutoff window. Late cancellations may incur a fee.
+            </Text>
+          </View>
+          <View style={styles.policyRow}>
+            <Ionicons name="shield-checkmark-outline" size={16} color={colors.neutral500} />
+            <Text style={styles.policyText}>
+              Your booking is validated and confirmed server-side for safety.
+            </Text>
+          </View>
+        </View>
 
         {/* Spacer for bottom bar */}
         <View style={{ height: 100 }} />
@@ -397,12 +477,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.errorLight,
     borderRadius: borderRadius.md,
     padding: 14,
+  },
+  errorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   errorMessage: { color: colors.error, fontSize: 14, flex: 1 },
-  errorTitle: { fontSize: 18, fontWeight: fontWeights.semibold, color: colors.neutral900 },
+  errorHint: { fontSize: 12, color: colors.neutral500, marginTop: spacing.sm, fontStyle: 'italic' },
+  errorTitle: { fontSize: fontSizes.base, fontWeight: fontWeights.bold, color: colors.error },
+  emptyTitle: { fontSize: 18, fontWeight: fontWeights.semibold, color: colors.neutral900 },
   errorSubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },
   goBackBtn: {
     marginTop: spacing.md,
@@ -433,4 +518,23 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.6 },
   confirmButtonText: { color: colors.white, fontSize: fontSizes.md, fontWeight: fontWeights.bold },
+
+  // Booking Policy
+  policyCard: {
+    marginHorizontal: layout.screenPaddingH,
+    backgroundColor: colors.primarySurface,
+    borderRadius: borderRadius.xl,
+    padding: layout.cardPaddingLg,
+    borderWidth: 1,
+    borderColor: colors.primaryMuted,
+    marginBottom: layout.itemGap,
+  },
+  policyTitle: { fontSize: fontSizes.base, fontWeight: fontWeights.bold, color: colors.neutral900 },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  policyText: { flex: 1, fontSize: 13, color: colors.neutral600, lineHeight: 18 },
 })

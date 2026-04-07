@@ -92,6 +92,24 @@ export default function BookingRulesPage() {
         setForm((prev) => ({ ...prev, id: data.id as string }));
       }
 
+      // Audit log
+      if (admin?.userId && admin?.clubId) {
+        await supabase.from("audit_logs").insert({
+          club_id: admin.clubId,
+          actor_id: admin.userId,
+          actor_role: "admin",
+          action: "booking_rule.update",
+          entity_type: "booking_rule",
+          entity_id: admin.clubId,
+          changes: {
+            max_booking_duration_mins: { old: null, new: form.max_booking_duration_mins },
+            advance_booking_days: { old: null, new: form.advance_booking_days },
+            cancellation_cutoff_hours: { old: null, new: form.cancellation_cutoff_hours },
+            max_active_bookings_per_user: { old: null, new: form.max_active_bookings_per_user },
+          },
+        });
+      }
+
       setToast("Booking rules saved successfully");
       setTimeout(() => setToast(""), 3000);
     } catch (err) {

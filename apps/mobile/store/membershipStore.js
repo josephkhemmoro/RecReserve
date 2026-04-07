@@ -16,10 +16,11 @@ export const useMembershipStore = create((set) => ({
     try {
       const { data, error } = await supabase
         .from('memberships')
-        .select('id, tier, tier_id, is_active, membership_tier:membership_tiers(id, name, discount_percent, can_book_free, color)')
+        .select('id, tier, tier_id, is_active, status, guest_allowance, renewal_date, membership_tier:membership_tiers(id, name, discount_percent, can_book_free, color)')
         .eq('user_id', userId)
         .eq('club_id', clubId)
         .eq('is_active', true)
+        .in('status', ['active', 'trial'])
         .maybeSingle()
 
       if (error) throw error
@@ -32,6 +33,9 @@ export const useMembershipStore = create((set) => ({
             tier: data.tier,
             tier_id: data.tier_id,
             is_active: data.is_active,
+            status: data.status,
+            guest_allowance: data.guest_allowance,
+            renewal_date: data.renewal_date,
           },
           tier: tierData
             ? {

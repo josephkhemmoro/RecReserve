@@ -9,11 +9,13 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { toLocalISO } from '../../lib/dateUtils'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { useKudosStore } from '../../store/kudosStore'
+import { useBookingStore } from '../../store/bookingStore'
 import { useOpenSpotsStore } from '../../store/openSpotsStore'
 import { KudosPrompt } from '../../components/kudos'
 import { CreateOpenSpotModal } from '../../components/openSpots'
@@ -23,6 +25,7 @@ import { colors, spacing, borderRadius, shadows } from '../../theme'
 const TABS = ['Scheduled', 'Past']
 
 export default function ReservationsScreen() {
+  const router = useRouter()
   const { user } = useAuthStore()
   const { selectedClub } = useClubStore()
   const [activeTab, setActiveTab] = useState('Scheduled')
@@ -314,6 +317,22 @@ export default function ReservationsScreen() {
             </View>
           </View>
         )}
+
+        {activeTab === 'Past' && item.status !== 'cancelled' && (
+          <View style={styles.playAgainRow}>
+            <TouchableOpacity
+              style={styles.playAgainButton}
+              onPress={() => {
+                // Pre-fill booking with same court
+                useBookingStore.getState().setSelectedCourt(item.court || { id: item.court_id, name: item.court?.name })
+                router.push('/courts/select')
+              }}
+            >
+              <Icon name="repeat-outline" size="sm" color={colors.primary} />
+              <Text style={styles.playAgainText}>Play Again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       </View>
     )
@@ -415,6 +434,9 @@ const styles = StyleSheet.create({
   cancelButton: { paddingHorizontal: spacing.base, paddingVertical: spacing.sm, borderRadius: borderRadius.sm, borderWidth: 1, borderColor: colors.errorLight, backgroundColor: colors.errorLight },
   cancelButtonText: { color: colors.error, fontSize: 13, fontWeight: '600' },
   cutoffText: { fontSize: 12, color: colors.neutral400, fontStyle: 'italic' },
+  playAgainRow: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.neutral100 },
+  playAgainButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, justifyContent: 'center', paddingVertical: spacing.sm },
+  playAgainText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: spacing['3xl'] },
   emptyTitle: { fontSize: 18, fontWeight: '600', color: colors.neutral900, marginBottom: spacing.sm },
   emptySubtitle: { fontSize: 14, color: colors.neutral400, textAlign: 'center' },

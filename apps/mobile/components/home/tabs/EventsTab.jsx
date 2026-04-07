@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native'
+import { useRouter } from 'expo-router'
 import { supabase } from '../../../lib/supabase'
 import { useAuthStore } from '../../../store/authStore'
 import { colors, textStyles, spacing, borderRadius } from '../../../theme'
@@ -23,6 +24,7 @@ function formatEventDate(startTime, endTime) {
 
 export function EventsTab({ upcomingEvents, pastEvents }) {
   const { user } = useAuthStore()
+  const router = useRouter()
   const [showPast, setShowPast] = useState(false)
   const [registeringId, setRegisteringId] = useState(null)
 
@@ -54,16 +56,18 @@ export function EventsTab({ upcomingEvents, pastEvents }) {
             const capacityText = event.max_participants ? `${event.registered_count || 0}/${event.max_participants} spots` : `${event.registered_count || 0} registered`
             const priceText = event.price > 0 ? `$${event.price}` : 'Free'
             return (
-              <View key={event.id} style={styles.eventCard}>
-                <View style={styles.eventHeader}>
-                  <Icon name={iconName} size="md" color={colors.primary} />
-                  <Text style={styles.eventTitle}>{event.title}</Text>
+              <TouchableOpacity key={event.id} onPress={() => router.push(`/events/${event.id}`)} activeOpacity={0.7}>
+                <View style={styles.eventCard}>
+                  <View style={styles.eventHeader}>
+                    <Icon name={iconName} size="md" color={colors.primary} />
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                  </View>
+                  <Text style={styles.eventMeta}>{formatEventDate(event.start_time, event.end_time)}</Text>
+                  <Text style={styles.eventMeta}>{capacityText} · {priceText}</Text>
+                  {event.description && <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>}
+                  <Button title={registeringId === event.id ? 'Registering...' : 'Register'} onPress={() => handleRegister(event.id)} variant="primary" size="sm" fullWidth disabled={registeringId === event.id} />
                 </View>
-                <Text style={styles.eventMeta}>{formatEventDate(event.start_time, event.end_time)}</Text>
-                <Text style={styles.eventMeta}>{capacityText} · {priceText}</Text>
-                {event.description && <Text style={styles.eventDesc} numberOfLines={2}>{event.description}</Text>}
-                <Button title={registeringId === event.id ? 'Registering...' : 'Register'} onPress={() => handleRegister(event.id)} variant="primary" size="sm" fullWidth disabled={registeringId === event.id} />
-              </View>
+              </TouchableOpacity>
             )
           })}
 
@@ -74,13 +78,15 @@ export function EventsTab({ upcomingEvents, pastEvents }) {
                 <Icon name={showPast ? 'chevron-up' : 'chevron-down'} size="sm" color={colors.neutral500} />
               </TouchableOpacity>
               {showPast && pastEvents.map((event) => (
-                <View key={event.id} style={styles.pastCard}>
-                  <Icon name={EVENT_ICONS[event.event_type] || 'calendar-outline'} size="sm" color={colors.neutral400} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pastTitle}>{event.title}</Text>
-                    <Text style={styles.pastMeta}>{new Date(event.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
+                <TouchableOpacity key={event.id} onPress={() => router.push(`/events/${event.id}`)} activeOpacity={0.7}>
+                  <View style={styles.pastCard}>
+                    <Icon name={EVENT_ICONS[event.event_type] || 'calendar-outline'} size="sm" color={colors.neutral400} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pastTitle}>{event.title}</Text>
+                      <Text style={styles.pastMeta}>{new Date(event.start_time).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</Text>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
             </>
           )}

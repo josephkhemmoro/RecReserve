@@ -92,6 +92,7 @@ export default function BookCourtScreen() {
     [availability, dayOfWeek]
   )
 
+
   useEffect(() => {
     fetchData()
   }, [courtId, date])

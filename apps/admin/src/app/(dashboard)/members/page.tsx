@@ -23,6 +23,9 @@ interface Member {
     tier_name: string | null;
     tier_color: string | null;
     is_active: boolean;
+    status: string | null;
+    guest_allowance: number | null;
+    renewal_date: string | null;
   } | null;
 }
 
@@ -58,6 +61,9 @@ export default function MembersPage() {
           user_id,
           tier_id,
           is_active,
+          status,
+          guest_allowance,
+          renewal_date,
           membership_tier:membership_tiers(name, color),
           user:users!memberships_user_id_fkey(id, full_name, email, role, created_at)
         `)
@@ -83,11 +89,14 @@ export default function MembersPage() {
           role: user.role,
           created_at: user.created_at,
           membership: {
-          id: m.id as string,
-          tier_id: m.tier_id as string | null,
-          tier_name: tier?.name ?? null,
-          tier_color: tier?.color ?? null,
-          is_active: m.is_active as boolean,
+            id: m.id as string,
+            tier_id: m.tier_id as string | null,
+            tier_name: tier?.name ?? null,
+            tier_color: tier?.color ?? null,
+            is_active: m.is_active as boolean,
+            status: (m.status as string) ?? null,
+            guest_allowance: (m.guest_allowance as number) ?? null,
+            renewal_date: (m.renewal_date as string) ?? null,
           },
         });
       }
@@ -206,17 +215,43 @@ export default function MembersPage() {
     }
   };
 
-  const handleToggleSuspend = async (member: Member) => {
+  const handleStatusChange = async (member: Member, newStatus: string) => {
     if (!member.membership || !admin?.clubId) return;
     try {
       const supabase = createClient();
+      const updates: Record<string, unknown> = { status: newStatus };
+
+      if (newStatus === "active") {
+        updates.is_active = true;
+        updates.suspended_at = null;
+        updates.suspended_reason = null;
+      } else if (newStatus === "suspended") {
+        updates.is_active = false;
+        updates.suspended_at = new Date().toISOString();
+      } else if (newStatus === "cancelled") {
+        updates.is_active = false;
+        updates.cancelled_at = new Date().toISOString();
+      }
+
       await supabase
         .from("memberships")
-        .update({ is_active: !member.membership.is_active })
+        .update(updates)
         .eq("id", member.membership.id);
+
+      // Audit log
+      await supabase.from("audit_logs").insert({
+        club_id: admin.clubId,
+        actor_id: admin.userId,
+        actor_role: "admin",
+        action: `membership.${newStatus === "active" ? "activate" : newStatus === "suspended" ? "suspend" : "cancel"}`,
+        entity_type: "membership",
+        entity_id: member.membership.id,
+        changes: { status: { old: member.membership.status, new: newStatus } },
+      });
+
       fetchMembers(admin.clubId);
     } catch (err) {
-      console.error("Error toggling suspend:", err);
+      console.error("Error changing membership status:", err);
     }
   };
 
@@ -326,21 +361,31 @@ export default function MembersPage() {
                   </td>
                   <td className="px-6 py-3">
                     <Badge
-                      label={m.membership?.is_active !== false ? "Active" : "Suspended"}
-                      variant={m.membership?.is_active !== false ? "success" : "error"}
+                      label={m.membership?.status === "trial" ? "Trial" : m.membership?.status === "suspended" ? "Suspended" : m.membership?.status === "cancelled" ? "Cancelled" : m.membership?.status === "expired" ? "Expired" : m.membership?.is_active !== false ? "Active" : "Inactive"}
+                      variant={m.membership?.status === "active" ? "success" : m.membership?.status === "trial" ? "info" : m.membership?.status === "suspended" || m.membership?.status === "cancelled" ? "error" : m.membership?.status === "expired" ? "warning" : m.membership?.is_active !== false ? "success" : "error"}
                     />
                   </td>
                   <td className="px-6 py-3 text-right space-x-2">
                     {m.membership && (
-                      <Button
-                        variant={m.membership.is_active ? "danger" : "ghost"}
-                        size="sm"
-                        onClick={() => handleToggleSuspend(m)}
-                        className={!m.membership.is_active ? "text-success hover:text-success" : ""}
+                      <select
+                        value={m.membership.status || "active"}
+                        onChange={(e) => handleStatusChange(m, e.target.value)}
+                        className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
-                        {m.membership.is_active ? "Suspend" : "Unsuspend"}
-                      </Button>
+                        <option value="active">Active</option>
+                        <option value="trial">Trial</option>
+                        <option value="suspended">Suspended</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
                     )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.location.href = `/members/${m.id}`}
+                      className="text-brand hover:text-brand-dark"
+                    >
+                      View
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"

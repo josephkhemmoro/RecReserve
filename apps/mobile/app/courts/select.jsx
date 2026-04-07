@@ -13,6 +13,8 @@ import { supabase } from '../../lib/supabase'
 import { useClubStore } from '../../store/clubStore'
 import { useBookingStore } from '../../store/bookingStore'
 import { useMembershipStore } from '../../store/membershipStore'
+import { useSlotDemand } from '../../lib/useSlotDemand'
+import { DemandHeatmap } from '../../components/booking/DemandHeatmap'
 import { colors, spacing, borderRadius, shadows, fontSizes, fontWeights, layout } from '../../theme'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -57,6 +59,16 @@ export default function CourtSelectScreen() {
   const [viewYear, setViewYear] = useState(today.getFullYear())
 
   const selectedDateStr = toDateStr(selectedDateObj)
+  const { demandMap } = useSlotDemand(selectedClub?.id, selectedDateStr)
+
+  const heatmapSlots = useMemo(() => {
+    if (!demandMap || Object.keys(demandMap).length === 0) return []
+    return Object.values(demandMap).sort((a, b) => {
+      const [ah, am] = a.time.split(':').map(Number)
+      const [bh, bm] = b.time.split(':').map(Number)
+      return (ah * 60 + am) - (bh * 60 + bm)
+    })
+  }, [demandMap])
 
   // Build calendar grid for the current view month
   const calendarDays = useMemo(() => {
@@ -280,6 +292,10 @@ export default function CourtSelectScreen() {
         contentContainerStyle={styles.courtsContent}
         showsVerticalScrollIndicator={false}
       >
+        {heatmapSlots.length > 0 && (
+          <DemandHeatmap slots={heatmapSlots} />
+        )}
+
         {courts.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="tennisball-outline" size={48} color={colors.neutral300} />

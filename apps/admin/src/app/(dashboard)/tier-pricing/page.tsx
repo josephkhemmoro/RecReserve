@@ -127,12 +127,40 @@ export default function TierPricingPage() {
           .update(payload)
           .eq("id", editingId);
         if (updateError) throw updateError;
+
+        // Audit log for update
+        if (admin?.userId && admin?.clubId) {
+          await supabase.from("audit_logs").insert({
+            club_id: admin.clubId,
+            actor_id: admin.userId,
+            actor_role: "admin",
+            action: "pricing.change",
+            entity_type: "membership_tier",
+            entity_id: editingId,
+            changes: { name: { old: null, new: form.name } },
+          });
+        }
+
         showToast("Membership updated");
       } else {
         const { error: insertError } = await supabase
           .from("membership_tiers")
           .insert(payload);
         if (insertError) throw insertError;
+
+        // Audit log for create
+        if (admin?.userId && admin?.clubId) {
+          await supabase.from("audit_logs").insert({
+            club_id: admin.clubId,
+            actor_id: admin.userId,
+            actor_role: "admin",
+            action: "pricing.change",
+            entity_type: "membership_tier",
+            entity_id: null,
+            changes: { name: { old: null, new: form.name } },
+          });
+        }
+
         showToast("Membership created");
       }
 

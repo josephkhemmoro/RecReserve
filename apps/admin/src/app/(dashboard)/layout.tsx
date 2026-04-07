@@ -14,9 +14,18 @@ import {
   UsersIcon,
   TagIcon,
   MegaphoneIcon,
+  BellAlertIcon,
+  ChartBarIcon,
   Cog6ToothIcon,
   AdjustmentsHorizontalIcon,
+  ShieldCheckIcon,
+  ClipboardDocumentListIcon,
   ArrowRightStartOnRectangleIcon,
+  AcademicCapIcon,
+  TrophyIcon,
+  TicketIcon,
+  DocumentTextIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 
 interface NavGroup {
@@ -35,7 +44,11 @@ const navGroups: NavGroup[] = [
       { label: "Courts", href: "/courts", icon: Squares2X2Icon },
       { label: "Reservations", href: "/reservations", icon: CalendarDaysIcon },
       { label: "Events", href: "/events", icon: CalendarIcon },
+      { label: "Programs", href: "/programs", icon: AcademicCapIcon },
+      { label: "Leagues", href: "/leagues", icon: TrophyIcon },
+      { label: "Front Desk", href: "/front-desk", icon: TicketIcon },
       { label: "Weather Closure", href: "/weather-closure", icon: CloudIcon },
+      { label: "Booking Policies", href: "/booking-policies", icon: ShieldCheckIcon },
     ],
   },
   {
@@ -47,13 +60,23 @@ const navGroups: NavGroup[] = [
   },
   {
     label: "Engagement",
-    items: [{ label: "Announcements", href: "/announcements", icon: MegaphoneIcon }],
+    items: [
+      { label: "Announcements", href: "/announcements", icon: MegaphoneIcon },
+      { label: "Push Campaigns", href: "/push-campaigns", icon: BellAlertIcon },
+      { label: "Templates", href: "/message-templates", icon: DocumentTextIcon },
+      { label: "Comm History", href: "/communications", icon: ChatBubbleLeftRightIcon },
+    ],
+  },
+  {
+    label: "Analytics",
+    items: [{ label: "Reports", href: "/reports", icon: ChartBarIcon }],
   },
   {
     label: "Configuration",
     items: [
       { label: "Booking Rules", href: "/booking-rules", icon: AdjustmentsHorizontalIcon },
       { label: "Club Settings", href: "/settings", icon: Cog6ToothIcon },
+      { label: "Audit Log", href: "/audit-log", icon: ClipboardDocumentListIcon },
     ],
   },
 ];

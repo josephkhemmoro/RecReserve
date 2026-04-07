@@ -155,6 +155,7 @@ export default function HomeScreen() {
               openSpots={openSpots}
               announcements={announcements}
               userId={userId}
+              clubId={clubId}
               sentSpotIds={sentSpotIds}
               onRequestJoin={(spotId) => sendRequest(spotId, userId)}
             />

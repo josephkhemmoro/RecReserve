@@ -65,6 +65,7 @@ export default function DashboardPage() {
   }>({ courts: [], occupancyPercent: 0 });
   const [revenueData, setRevenueData] = useState<CourtRevenue[]>([]);
   const [markingNoShow, setMarkingNoShow] = useState<string | null>(null);
+  const [setupChecklist, setSetupChecklist] = useState<{ courts: boolean; tiers: boolean; rules: boolean; stripe: boolean } | null>(null);
 
   const fetchDashboard = useCallback(async (clubId: string) => {
     const supabase = createClient();
@@ -178,6 +179,30 @@ export default function DashboardPage() {
   useEffect(() => {
     if (admin?.clubId) fetchDashboard(admin.clubId);
   }, [admin?.clubId, fetchDashboard]);
+
+  useEffect(() => {
+    if (!admin?.clubId) return;
+    const checkSetup = async () => {
+      const supabase = createClient();
+      const [courtsRes, tiersRes, rulesRes, clubRes] = await Promise.all([
+        supabase.from("courts").select("id", { count: "exact", head: true }).eq("club_id", admin.clubId).eq("is_active", true),
+        supabase.from("membership_tiers").select("id", { count: "exact", head: true }).eq("club_id", admin.clubId),
+        supabase.from("booking_rules").select("id", { count: "exact", head: true }).eq("club_id", admin.clubId),
+        supabase.from("clubs").select("stripe_onboarding_complete").eq("id", admin.clubId).single(),
+      ]);
+      const checklist = {
+        courts: (courtsRes.count ?? 0) > 0,
+        tiers: (tiersRes.count ?? 0) > 0,
+        rules: (rulesRes.count ?? 0) > 0,
+        stripe: clubRes.data?.stripe_onboarding_complete === true,
+      };
+      // Only show if not everything is done
+      if (!checklist.courts || !checklist.tiers || !checklist.rules || !checklist.stripe) {
+        setSetupChecklist(checklist);
+      }
+    };
+    checkSetup();
+  }, [admin?.clubId]);
 
   const handleMarkNoShow = async (reservation: TodayReservation) => {
     if (!confirm(`Mark ${reservation.user?.full_name || "this player"}'s reservation as a no-show?`))
@@ -352,6 +377,37 @@ export default function DashboardPage() {
           </div>
           {stripeError && <p className="text-xs text-red-600 mt-2">{stripeError}</p>}
         </div>
+      )}
+
+      {/* Setup Checklist */}
+      {setupChecklist && (
+        <Card title="Setup Checklist" className="mb-6">
+          <p className="text-sm text-slate-500 mb-4">Complete these steps to start accepting bookings.</p>
+          <div className="space-y-3">
+            {[
+              { done: setupChecklist.courts, label: "Add your courts", href: "/courts", description: "Define courts with names and hourly rates" },
+              { done: setupChecklist.tiers, label: "Create membership tiers", href: "/tier-pricing", description: "Set up pricing tiers with discounts" },
+              { done: setupChecklist.rules, label: "Configure booking rules", href: "/booking-rules", description: "Set advance booking, duration, and cancellation limits" },
+              { done: setupChecklist.stripe, label: "Connect Stripe", href: "#stripe", description: "Enable payments by connecting your Stripe account" },
+            ].map((step) => (
+              <div key={step.label} className="flex items-center gap-3">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${step.done ? "bg-emerald-100" : "bg-slate-100"}`}>
+                  {step.done ? (
+                    <svg className="w-4 h-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  ) : (
+                    <span className="w-2 h-2 rounded-full bg-slate-300" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <a href={step.href} className={`text-sm font-medium ${step.done ? "text-slate-400 line-through" : "text-brand hover:underline"}`}>
+                    {step.label}
+                  </a>
+                  {!step.done && <p className="text-xs text-slate-400">{step.description}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Stat Cards */}
