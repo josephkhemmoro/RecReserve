@@ -21,6 +21,7 @@ import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
 import { useStreakStore } from '../../store/streakStore'
 import { useKudosStore } from '../../store/kudosStore'
+import { useRewardsStore } from '../../store/rewardsStore'
 import { StreakBadge, StreakMilestones, StreakFreezeButton } from '../../components/streaks'
 import { KudosBadge, KudosReceivedList } from '../../components/kudos'
 import { Avatar, Icon } from '../../components/ui'
@@ -45,6 +46,12 @@ export default function ProfileScreen() {
     isLoading: kudosLoading,
     fetchReceivedKudos,
   } = useKudosStore()
+  const {
+    rewards,
+    fetchRewards,
+    availableRewards,
+    clearRewards,
+  } = useRewardsStore()
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -63,6 +70,7 @@ export default function ProfileScreen() {
       fetchStreak(user.id, selectedClub.id)
       fetchMilestones(user.id, selectedClub.id)
       fetchReceivedKudos(user.id, selectedClub.id)
+      fetchRewards(user.id, selectedClub.id)
     }
   }, [user?.id, selectedClub?.id])
 
@@ -74,6 +82,7 @@ export default function ProfileScreen() {
       user?.id && selectedClub?.id ? fetchStreak(user.id, selectedClub.id) : Promise.resolve(),
       user?.id && selectedClub?.id ? fetchMilestones(user.id, selectedClub.id) : Promise.resolve(),
       user?.id && selectedClub?.id ? fetchReceivedKudos(user.id, selectedClub.id) : Promise.resolve(),
+      user?.id && selectedClub?.id ? fetchRewards(user.id, selectedClub.id) : Promise.resolve(),
     ])
     setRefreshing(false)
   }, [user?.id, selectedClub?.id])
@@ -180,6 +189,7 @@ export default function ProfileScreen() {
       clearAuth()
       clearClub()
       clearMembership()
+      clearRewards()
     } catch {
       // handled by auth listener
     }
@@ -288,6 +298,33 @@ export default function ProfileScreen() {
               onFreeze={() => useFreeze(user?.id, selectedClub?.id)}
             />
           </View>
+        )}
+
+        {/* Rewards Row */}
+        {selectedClub && (
+          <TouchableOpacity
+            style={styles.rewardsRow}
+            onPress={() => router.push('/rewards')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.rewardsIconWrap}>
+              <Icon name="gift" size="md" color={colors.primary} />
+            </View>
+            <View style={styles.rewardsRowContent}>
+              <Text style={styles.rewardsRowTitle}>Rewards</Text>
+              <Text style={styles.rewardsRowSubtitle}>
+                Milestone rewards from your streak
+              </Text>
+            </View>
+            {availableRewards().length > 0 ? (
+              <View style={styles.rewardsBadge}>
+                <Text style={styles.rewardsBadgeText}>
+                  {availableRewards().length} available
+                </Text>
+              </View>
+            ) : null}
+            <Ionicons name="chevron-forward" size={18} color={colors.neutral400} />
+          </TouchableOpacity>
         )}
 
         {/* Kudos */}
@@ -486,6 +523,49 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.neutral900,
     marginBottom: 14,
+  },
+  rewardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
+  },
+  rewardsIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySurface,
+  },
+  rewardsRowContent: { flex: 1 },
+  rewardsRowTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.neutral900,
+  },
+  rewardsRowSubtitle: {
+    fontSize: 12,
+    color: colors.neutral500,
+    marginTop: 2,
+  },
+  rewardsBadge: {
+    backgroundColor: colors.primaryMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+  },
+  rewardsBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
   },
   kudosSection: {
     paddingHorizontal: spacing.xl,

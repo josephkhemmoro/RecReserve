@@ -214,7 +214,7 @@ export default function ReportsPage() {
         }
       } else if (type === "members") {
         const { data: rows } = await supabase.from("memberships")
-          .select("user:users!memberships_user_id_fkey(full_name, email, created_at), status, is_active, membership_tier:membership_tiers(name)")
+          .select("user:users!memberships_user_id_fkey(full_name, email, created_at), status, is_active, membership_tier:membership_tiers!tier_id(name)")
           .eq("club_id", admin.clubId);
         csvContent = "Name,Email,Tier,Status,Active,Joined\n";
         for (const r of rows ?? []) {

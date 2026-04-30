@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useClubStore } from '../../store/clubStore'
 import { useMembershipStore } from '../../store/membershipStore'
 import { useStreakStore } from '../../store/streakStore'
 import { useAnalyticsStore } from '../../store/analyticsStore'
+import { useRewardsStore } from '../../store/rewardsStore'
 import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 
 
@@ -44,9 +45,28 @@ export default function BookingConfirmScreen() {
   } = useBookingStore()
   const { selectedClub } = useClubStore()
   const tier = useMembershipStore((s) => s.tier)
+  const { rewards, fetchRewards, availableRewards } = useRewardsStore()
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [selectedReward, setSelectedReward] = useState(null)
+
+  // Load rewards when we have enough context; failures must not block booking.
+  useEffect(() => {
+    if (user?.id && selectedClub?.id) {
+      fetchRewards(user.id, selectedClub.id).catch(() => {})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, selectedClub?.id])
+
+  // Applicable rewards for court bookings — exclude bonus_credit in v1.
+  const applicableRewards = useMemo(() => {
+    const list = (availableRewards() || []).filter(
+      (r) => r.reward_type === 'discount_percent' || r.reward_type === 'free_booking'
+    )
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rewards])
 
   if (!selectedCourt || !selectedDate || !startTime || !endTime) {
     return (
@@ -61,10 +81,33 @@ export default function BookingConfirmScreen() {
     )
   }
 
-  const isFree = priceBreakdown?.is_free ?? false
+  const tierFree = priceBreakdown?.is_free ?? false
   const basePrice = priceBreakdown?.base_price ?? 0
-  const discountAmount = priceBreakdown?.discount_amount ?? 0
-  const finalPrice = priceBreakdown?.final_price ?? 0
+  const tierDiscountAmount = priceBreakdown?.discount_amount ?? 0
+  const priceAfterTier = priceBreakdown?.final_price ?? 0
+
+  // Apply selected reward on top of tier-discounted price
+  let rewardDiscountAmount = 0
+  let finalAfterReward = priceAfterTier
+  let rewardMakesFree = false
+  if (selectedReward && !tierFree) {
+    if (selectedReward.reward_type === 'free_booking') {
+      rewardDiscountAmount = priceAfterTier
+      finalAfterReward = 0
+      rewardMakesFree = true
+    } else if (selectedReward.reward_type === 'discount_percent') {
+      const pct = Number(selectedReward.reward_value) || 0
+      rewardDiscountAmount = Math.round(priceAfterTier * pct) / 100
+      finalAfterReward = Math.max(0, priceAfterTier - rewardDiscountAmount)
+    }
+  } else if (selectedReward && tierFree && selectedReward.reward_type === 'free_booking') {
+    // Already free; no change.
+    rewardMakesFree = true
+  }
+
+  const isFree = tierFree || rewardMakesFree || finalAfterReward <= 0
+  const discountAmount = tierDiscountAmount // for display of tier discount
+  const finalPrice = isFree ? 0 : finalAfterReward
 
   const formatDisplayDate = () => {
     return new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
@@ -131,10 +174,14 @@ export default function BookingConfirmScreen() {
       // Step 2: Handle payment if not free
       let paymentIntentId = null
       let amountCents = 0
+      let rewardAppliedFree = false
       const idempotencyKey = `booking_${user?.id}_${selectedCourt.id}_${startDT}`
 
       if (!isFree && finalPrice > 0) {
-        amountCents = Math.round(finalPrice * 100)
+        // Send the pre-reward amount (tier-discounted only) so the server can
+        // apply any selected reward on top. When no reward is selected, this
+        // equals the final displayed price.
+        amountCents = Math.round(priceAfterTier * 100)
 
         const { data: paymentData, error: fnError } = await supabase.functions.invoke(
           'create-payment-intent',
@@ -147,6 +194,7 @@ export default function BookingConfirmScreen() {
               date: selectedDate,
               start_time: startTime,
               end_time: endTime,
+              reward_id: selectedReward?.id || null,
             },
           }
         )
@@ -155,40 +203,70 @@ export default function BookingConfirmScreen() {
         const piResult = paymentData || fnError
         console.log('create-payment-intent response:', JSON.stringify(piResult))
         if (piResult?.error) throw new Error(piResult.error)
-        if (!piResult?.clientSecret) throw new Error('Payment service error: ' + JSON.stringify(piResult))
-        const { clientSecret } = paymentData
-        paymentIntentId = paymentData.paymentIntentId
 
-        const { error: initError } = await initPaymentSheet({
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'RecReserve',
-        })
-        if (initError) throw new Error(initError.message)
+        // Free booking case: reward applied server-side, no payment sheet needed.
+        if (piResult?.reward_applied === true && piResult?.clientSecret === null) {
+          rewardAppliedFree = true
+        } else {
+          if (!piResult?.clientSecret) throw new Error('Payment service error: ' + JSON.stringify(piResult))
+          const { clientSecret } = paymentData
+          paymentIntentId = paymentData.paymentIntentId
 
-        const { error: paymentError } = await presentPaymentSheet()
-        if (paymentError) {
-          if (paymentError.code === 'Canceled') {
-            setLoading(false)
-            return
+          const { error: initError } = await initPaymentSheet({
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'RecReserve',
+          })
+          if (initError) throw new Error(initError.message)
+
+          const { error: paymentError } = await presentPaymentSheet()
+          if (paymentError) {
+            if (paymentError.code === 'Canceled') {
+              setLoading(false)
+              return
+            }
+            throw new Error(paymentError.message)
           }
-          throw new Error(paymentError.message)
         }
       }
 
       // Step 3: Create reservation directly (validated by step 1)
-      const { error: resErr } = await supabase.from('reservations').insert({
-        court_id: selectedCourt.id,
-        user_id: user?.id,
-        club_id: selectedClub?.id,
-        start_time: startDT,
-        end_time: endDT,
-        status: 'confirmed',
-        stripe_payment_id: paymentIntentId,
-        amount_paid: isFree ? 0 : finalPrice,
-        validated_at: new Date().toISOString(),
-      })
+      const bookingIsFree = isFree || rewardAppliedFree
+      const { data: insertedRes, error: resErr } = await supabase
+        .from('reservations')
+        .insert({
+          court_id: selectedCourt.id,
+          user_id: user?.id,
+          club_id: selectedClub?.id,
+          start_time: startDT,
+          end_time: endDT,
+          status: 'confirmed',
+          stripe_payment_id: bookingIsFree ? null : paymentIntentId,
+          amount_paid: bookingIsFree ? 0 : finalPrice,
+          validated_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
 
       if (resErr) throw new Error('Failed to create reservation: ' + resErr.message)
+
+      // Step 4: Mark reward redeemed, if one was used.
+      if (selectedReward && insertedRes?.id) {
+        try {
+          const { error: redeemErr } = await supabase.rpc('redeem_player_reward', {
+            p_reward_id: selectedReward.id,
+            p_user_id: user?.id,
+            p_reservation_id: insertedRes.id,
+          })
+          if (redeemErr) console.warn('Failed to mark reward redeemed:', redeemErr)
+        } catch (redeemCatch) {
+          console.warn('Failed to mark reward redeemed (exception):', redeemCatch)
+        }
+        // Refresh rewards store so the UI reflects the consumed reward.
+        useRewardsStore
+          .getState()
+          .fetchRewards(user?.id, selectedClub?.id)
+          .catch(() => {})
+      }
 
       // Fire-and-forget streak update
       if (user?.id && selectedClub?.id) {
@@ -253,6 +331,59 @@ export default function BookingConfirmScreen() {
           </View>
         </View>
 
+        {/* Apply a Reward */}
+        {applicableRewards.length > 0 && (
+          <View style={styles.rewardSelectCard}>
+            <Text style={styles.priceTitle}>Apply a reward</Text>
+            <View style={styles.divider} />
+            <View style={styles.rewardChipsRow}>
+              <TouchableOpacity
+                style={[styles.rewardChip, !selectedReward && styles.rewardChipActive]}
+                onPress={() => setSelectedReward(null)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[styles.rewardChipText, !selectedReward && styles.rewardChipTextActive]}
+                >
+                  No reward
+                </Text>
+              </TouchableOpacity>
+              {applicableRewards.map((r) => {
+                const isActive = selectedReward?.id === r.id
+                const badge =
+                  r.reward_type === 'free_booking'
+                    ? 'Free'
+                    : `${r.reward_value}% off`
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[styles.rewardChip, isActive && styles.rewardChipActive]}
+                    onPress={() => setSelectedReward(isActive ? null : r)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[styles.rewardChipText, isActive && styles.rewardChipTextActive]}
+                      numberOfLines={1}
+                    >
+                      {r.title || 'Reward'}
+                    </Text>
+                    <View style={[styles.rewardChipBadge, isActive && styles.rewardChipBadgeActive]}>
+                      <Text
+                        style={[
+                          styles.rewardChipBadgeText,
+                          isActive && styles.rewardChipBadgeTextActive,
+                        ]}
+                      >
+                        {badge}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
+          </View>
+        )}
+
         {/* Price Breakdown */}
         <View style={styles.priceCard}>
           <Text style={styles.priceTitle}>Price Breakdown</Text>
@@ -273,12 +404,23 @@ export default function BookingConfirmScreen() {
             <View style={styles.priceRow}>
               <View style={styles.discountLabel}>
                 <Text style={styles.discountText}>
-                  {isFree
+                  {tierFree
                     ? `${tier?.name || 'Tier'} — Free booking`
                     : `${tier?.name || 'Tier'} discount (${tier?.discount_percent}%)`}
                 </Text>
               </View>
               <Text style={styles.discountAmount}>-${discountAmount.toFixed(2)}</Text>
+            </View>
+          )}
+
+          {selectedReward && rewardDiscountAmount > 0 && (
+            <View style={styles.priceRow}>
+              <View style={styles.discountLabel}>
+                <Text style={styles.discountText} numberOfLines={1}>
+                  Reward: {selectedReward.title || 'Reward'}
+                </Text>
+              </View>
+              <Text style={styles.discountAmount}>-${rewardDiscountAmount.toFixed(2)}</Text>
             </View>
           )}
 
@@ -441,6 +583,64 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.neutral100,
   },
   guestName: { fontSize: 14, color: colors.neutral900 },
+
+  // Reward selector
+  rewardSelectCard: {
+    marginHorizontal: layout.screenPaddingH,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: layout.cardPaddingLg,
+    borderWidth: 1,
+    borderColor: colors.neutral100,
+    marginBottom: layout.itemGap,
+  },
+  rewardChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  rewardChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: colors.neutral200,
+    backgroundColor: colors.white,
+    maxWidth: '100%',
+  },
+  rewardChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySurface,
+  },
+  rewardChipText: {
+    fontSize: fontSizes.sm,
+    fontWeight: fontWeights.semibold,
+    color: colors.neutral700,
+    flexShrink: 1,
+  },
+  rewardChipTextActive: {
+    color: colors.primary,
+  },
+  rewardChipBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.neutral100,
+  },
+  rewardChipBadgeActive: {
+    backgroundColor: colors.primary,
+  },
+  rewardChipBadgeText: {
+    fontSize: 10,
+    fontWeight: fontWeights.bold,
+    color: colors.neutral700,
+  },
+  rewardChipBadgeTextActive: {
+    color: colors.white,
+  },
 
   // Price breakdown
   priceCard: {

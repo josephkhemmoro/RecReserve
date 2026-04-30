@@ -26,6 +26,7 @@ import {
   TicketIcon,
   DocumentTextIcon,
   ChatBubbleLeftRightIcon,
+  GiftIcon,
 } from "@heroicons/react/24/outline";
 
 interface NavGroup {
@@ -65,6 +66,7 @@ const navGroups: NavGroup[] = [
       { label: "Push Campaigns", href: "/push-campaigns", icon: BellAlertIcon },
       { label: "Templates", href: "/message-templates", icon: DocumentTextIcon },
       { label: "Comm History", href: "/communications", icon: ChatBubbleLeftRightIcon },
+      { label: "Rewards Program", href: "/rewards-program", icon: GiftIcon },
     ],
   },
   {

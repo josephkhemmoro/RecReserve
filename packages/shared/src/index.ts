@@ -36,6 +36,7 @@ export interface Club {
   stripe_account_id?: string
   stripe_account_status?: 'not_started' | 'pending' | 'active'
   subscription_status: 'active' | 'inactive' | 'trialing'
+  requires_paid_membership?: boolean
   created_at: string
 }
 
@@ -127,6 +128,14 @@ export interface MembershipTier {
   discount_percent: number
   can_book_free: boolean
   color?: string
+  // Paid memberships
+  is_paid?: boolean
+  monthly_price_cents?: number
+  stripe_product_id?: string | null
+  stripe_price_id?: string | null
+  is_default?: boolean
+  sort_order?: number
+  description?: string | null
   created_at: string
 }
 
@@ -148,6 +157,11 @@ export interface Membership {
   cancelled_at?: string
   guest_allowance?: number
   booking_credits?: number
+  // Paid memberships (Stripe subscription linkage)
+  stripe_customer_id?: string | null
+  current_period_end?: string | null
+  cancel_at_period_end?: boolean
+  pending_tier_id?: string | null
   created_at: string
   membership_tier?: MembershipTier
 }

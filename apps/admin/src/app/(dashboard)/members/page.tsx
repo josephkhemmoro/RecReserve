@@ -26,7 +26,23 @@ interface Member {
     status: string | null;
     guest_allowance: number | null;
     renewal_date: string | null;
+    stripe_subscription_id: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
   } | null;
+}
+
+function formatPeriodEnd(iso: string | null): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
 }
 
 export default function MembersPage() {
@@ -64,7 +80,10 @@ export default function MembersPage() {
           status,
           guest_allowance,
           renewal_date,
-          membership_tier:membership_tiers(name, color),
+          stripe_subscription_id,
+          current_period_end,
+          cancel_at_period_end,
+          membership_tier:membership_tiers!tier_id(name, color),
           user:users!memberships_user_id_fkey(id, full_name, email, role, created_at)
         `)
         .eq("club_id", clubId);
@@ -97,6 +116,9 @@ export default function MembersPage() {
             status: (m.status as string) ?? null,
             guest_allowance: (m.guest_allowance as number) ?? null,
             renewal_date: (m.renewal_date as string) ?? null,
+            stripe_subscription_id: (m.stripe_subscription_id as string) ?? null,
+            current_period_end: (m.current_period_end as string) ?? null,
+            cancel_at_period_end: !!m.cancel_at_period_end,
           },
         });
       }
@@ -180,6 +202,8 @@ export default function MembersPage() {
 
   const handleMembershipChange = async (member: Member, tierId: string) => {
     if (!admin?.clubId) return;
+    // Subscribed members can only change tier via the mobile app flow
+    if (member.membership?.stripe_subscription_id) return;
     try {
       const supabase = createClient();
       let result;
@@ -329,7 +353,10 @@ export default function MembersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((m) => (
+              {filtered.map((m) => {
+                const isSubscribed = !!m.membership?.stripe_subscription_id;
+                const periodEnd = formatPeriodEnd(m.membership?.current_period_end ?? null);
+                return (
                 <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                   <td className="px-6 py-3 text-sm font-medium text-slate-900">{m.full_name}</td>
                   <td className="px-6 py-3 text-sm text-slate-600">{m.email}</td>
@@ -342,16 +369,28 @@ export default function MembersPage() {
                   </td>
                   <td className="px-6 py-3">
                     {tiers.length > 0 ? (
-                      <select
-                        value={m.membership?.tier_id ?? ""}
-                        onChange={(e) => handleMembershipChange(m, e.target.value)}
-                        className="px-2 py-1 rounded border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
-                      >
-                        <option value="">None</option>
-                        {tiers.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
+                      <div className="relative group inline-block">
+                        <select
+                          value={m.membership?.tier_id ?? ""}
+                          onChange={(e) => handleMembershipChange(m, e.target.value)}
+                          disabled={isSubscribed}
+                          className={`px-2 py-1 rounded border text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand ${
+                            isSubscribed
+                              ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "border-slate-300 text-slate-900"
+                          }`}
+                        >
+                          <option value="">None</option>
+                          {tiers.map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                        </select>
+                        {isSubscribed && (
+                          <div className="absolute bottom-full left-0 mb-1 px-2.5 py-1 bg-slate-800 text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                            Member must cancel/upgrade from the app
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-sm text-slate-400">No memberships created</span>
                     )}
@@ -360,10 +399,22 @@ export default function MembersPage() {
                     {new Date(m.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-3">
-                    <Badge
-                      label={m.membership?.status === "trial" ? "Trial" : m.membership?.status === "suspended" ? "Suspended" : m.membership?.status === "cancelled" ? "Cancelled" : m.membership?.status === "expired" ? "Expired" : m.membership?.is_active !== false ? "Active" : "Inactive"}
-                      variant={m.membership?.status === "active" ? "success" : m.membership?.status === "trial" ? "info" : m.membership?.status === "suspended" || m.membership?.status === "cancelled" ? "error" : m.membership?.status === "expired" ? "warning" : m.membership?.is_active !== false ? "success" : "error"}
-                    />
+                    <div className="flex flex-col gap-1 items-start">
+                      <Badge
+                        label={m.membership?.status === "trial" ? "Trial" : m.membership?.status === "suspended" ? "Suspended" : m.membership?.status === "cancelled" ? "Cancelled" : m.membership?.status === "expired" ? "Expired" : m.membership?.is_active !== false ? "Active" : "Inactive"}
+                        variant={m.membership?.status === "active" ? "success" : m.membership?.status === "trial" ? "info" : m.membership?.status === "suspended" || m.membership?.status === "cancelled" ? "error" : m.membership?.status === "expired" ? "warning" : m.membership?.is_active !== false ? "success" : "error"}
+                      />
+                      {isSubscribed && (
+                        <Badge
+                          label={
+                            m.membership?.cancel_at_period_end
+                              ? `Cancelling ${periodEnd}`
+                              : `Subscription active until ${periodEnd}`
+                          }
+                          variant={m.membership?.cancel_at_period_end ? "warning" : "brand"}
+                        />
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-3 text-right space-x-2">
                     {m.membership && (
@@ -396,7 +447,8 @@ export default function MembersPage() {
                     </Button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

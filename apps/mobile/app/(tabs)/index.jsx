@@ -11,6 +11,7 @@ import { useStreakStore } from '../../store/streakStore'
 import { useNotificationStore } from '../../store/notificationStore'
 import { useOpenSpotsStore } from '../../store/openSpotsStore'
 import { useMembershipStore } from '../../store/membershipStore'
+import { useRewardsStore } from '../../store/rewardsStore'
 import { toLocalISO } from '../../lib/dateUtils'
 import { colors, textStyles, spacing, borderRadius } from '../../theme'
 import { Icon, Button, Avatar } from '../../components/ui'
@@ -29,6 +30,7 @@ export default function HomeScreen() {
   const { unreadCount } = useNotificationStore()
   const { openSpots, mySentRequests, fetchOpenSpots, fetchMySentRequests, sendRequest } = useOpenSpotsStore()
   const { tier, fetchMembershipTier } = useMembershipStore()
+  const { fetchRewards } = useRewardsStore()
 
   const [activeTab, setActiveTab] = useState('About')
   const [nextReservation, setNextReservation] = useState(null)
@@ -54,7 +56,7 @@ export default function HomeScreen() {
           .eq('user_id', userId).eq('club_id', clubId).eq('status', 'confirmed')
           .gte('start_time', now).order('start_time', { ascending: true }).limit(1),
         supabase.from('club_photos').select('id, photo_url').eq('club_id', clubId).order('sort_order').limit(6),
-        supabase.from('membership_tiers').select('id, name, discount_percent, can_book_free, color').eq('club_id', clubId),
+        supabase.from('membership_tiers').select('id, name, discount_percent, can_book_free, color, is_paid, monthly_price_cents, stripe_product_id, stripe_price_id, is_default, sort_order, description, benefits').eq('club_id', clubId).order('sort_order', { ascending: true }),
         supabase.from('club_announcements').select('id, title, body, created_at').eq('club_id', clubId).order('created_at', { ascending: false }).limit(3),
         supabase.from('events').select('id, title, event_type, start_time, end_time, max_participants, price, description')
           .eq('club_id', clubId).gt('start_time', now).order('start_time').limit(10),
@@ -93,6 +95,7 @@ export default function HomeScreen() {
       fetchOpenSpots(clubId)
       fetchMySentRequests(userId)
       fetchMembershipTier(userId, clubId)
+      fetchRewards(userId, clubId).catch(() => {})
     }
   }, [userId, clubId])
 

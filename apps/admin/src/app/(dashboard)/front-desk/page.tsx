@@ -70,7 +70,7 @@ export default function FrontDeskPage() {
       const supabase = createClient();
       const term = search.trim().toLowerCase();
       const { data } = await supabase.from("memberships")
-        .select("user:users!memberships_user_id_fkey(id, full_name, email, phone), status, membership_tier:membership_tiers(name)")
+        .select("user:users!memberships_user_id_fkey(id, full_name, email, phone), status, membership_tier:membership_tiers!tier_id(name)")
         .eq("club_id", admin.clubId).eq("is_active", true);
 
       const results = (data ?? []).filter((m: Record<string, unknown>) => {

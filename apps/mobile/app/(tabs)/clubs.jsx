@@ -11,13 +11,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Modal,
+  ScrollView,
 } from 'react-native'
 import { useRouter } from 'expo-router'
+import Ionicons from '@expo/vector-icons/Ionicons'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { useClubStore } from '../../store/clubStore'
 import { Avatar } from '../../components/ui'
-import { colors, spacing, borderRadius, shadows } from '../../theme'
+import { TierCard } from '../../components/membership/TierCard'
+import { colors, spacing, borderRadius, shadows, fontSizes, fontWeights, textStyles } from '../../theme'
 
 function formatDateOnly(date = new Date()) {
   const year = date.getFullYear()
@@ -36,6 +40,15 @@ export default function ClubsScreen() {
   const [joining, setJoining] = useState(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Tier picker modal state
+  const [tierPicker, setTierPicker] = useState({
+    visible: false,
+    club: null,
+    tiers: [],
+    requiresPaid: false,
+    loading: false,
+  })
 
   const refreshMemberships = useCallback(async () => {
     try {
@@ -95,13 +108,61 @@ export default function ClubsScreen() {
   const handleJoin = async (club) => {
     setJoining(club.id)
     try {
+      // Fetch club tiers and requires_paid_membership flag
+      const [tiersRes, clubRes] = await Promise.all([
+        supabase
+          .from('membership_tiers')
+          .select('id, name, is_paid, monthly_price_cents, is_default, description, discount_percent, can_book_free, color, benefits')
+          .eq('club_id', club.id)
+          .order('sort_order', { ascending: true }),
+        supabase.from('clubs').select('requires_paid_membership').eq('id', club.id).single(),
+      ])
+
+      if (tiersRes.error) throw tiersRes.error
+      if (clubRes.error) throw clubRes.error
+
+      const tiers = tiersRes.data || []
+      const requiresPaid = !!clubRes.data?.requires_paid_membership
+
+      if (requiresPaid) {
+        // Show tier picker — player picks a paid tier → upgrade flow
+        const paidTiers = tiers.filter((t) => t.is_paid)
+        if (paidTiers.length === 0) {
+          Alert.alert(
+            'Unavailable',
+            'This club is not accepting new members yet — contact the club admin.'
+          )
+          return
+        }
+        setTierPicker({
+          visible: true,
+          club,
+          tiers: paidTiers,
+          requiresPaid: true,
+          loading: false,
+        })
+        return
+      }
+
+      // Free membership flow — find default tier and insert directly
+      const defaultTier = tiers.find((t) => t.is_default)
+      if (!defaultTier) {
+        Alert.alert(
+          'Unavailable',
+          'This club is not accepting new members yet — contact the club admin.'
+        )
+        return
+      }
+
       const joinDate = formatDateOnly()
       const { error } = await supabase.from('memberships').insert({
         user_id: user?.id,
         club_id: club.id,
+        tier_id: defaultTier.id,
         tier: 'standard',
         start_date: joinDate,
         is_active: true,
+        status: 'active',
       })
 
       if (error) throw error
@@ -124,13 +185,27 @@ export default function ClubsScreen() {
         setSelectedClub(joinedMembership?.club || club)
       }
 
-      Alert.alert('Joined!', `You are now a member of ${club.name}`)
+      Alert.alert('Joined!', `You are now a member of ${club.name} on the ${defaultTier.name} tier.`)
     } catch (err) {
       console.error('Error joining club:', err)
       Alert.alert('Error', err?.message || 'Could not join club. Please try again.')
     } finally {
       setJoining(null)
     }
+  }
+
+  const handlePickPaidTier = (tier) => {
+    const club = tierPicker.club
+    setTierPicker({ visible: false, club: null, tiers: [], requiresPaid: false, loading: false })
+    // Hand off to upgrade flow — pass clubId so the flow knows the context
+    router.push({
+      pathname: `/membership/upgrade/${tier.id}`,
+      params: { clubId: club.id, joining: '1' },
+    })
+  }
+
+  const closeTierPicker = () => {
+    setTierPicker({ visible: false, club: null, tiers: [], requiresPaid: false, loading: false })
   }
 
   const handleSelect = (membership) => {
@@ -329,6 +404,53 @@ export default function ClubsScreen() {
           )
         }}
       />
+
+      {/* Tier Picker Modal */}
+      <Modal
+        visible={tierPicker.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={closeTierPicker}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Choose a membership</Text>
+                {tierPicker.club?.name ? (
+                  <Text style={styles.modalSubtitle}>
+                    {tierPicker.club.name} requires a paid membership
+                  </Text>
+                ) : null}
+              </View>
+              <TouchableOpacity onPress={closeTierPicker} hitSlop={10}>
+                <Ionicons name="close" size={24} color={colors.neutral500} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: spacing['2xl'] }}
+              showsVerticalScrollIndicator={false}
+            >
+              {tierPicker.tiers.length === 0 ? (
+                <Text style={styles.modalEmpty}>No paid tiers available.</Text>
+              ) : (
+                tierPicker.tiers.map((tier) => (
+                  <TierCard
+                    key={tier.id}
+                    tier={tier}
+                    onPress={() => handlePickPaidTier(tier)}
+                  />
+                ))
+              )}
+              <Text style={styles.modalFootnote}>
+                {"You'll review price and confirm payment before being charged."}
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   )
 }
@@ -516,5 +638,53 @@ const styles = StyleSheet.create({
   emptySearchText: {
     fontSize: 14,
     color: colors.neutral400,
+  },
+
+  // Tier picker modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: borderRadius.xl,
+    borderTopRightRadius: borderRadius.xl,
+    maxHeight: '85%',
+    paddingTop: spacing.base,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral100,
+  },
+  modalTitle: {
+    fontSize: fontSizes.lg,
+    fontWeight: fontWeights.bold,
+    color: colors.neutral900,
+  },
+  modalSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.neutral500,
+    marginTop: 2,
+  },
+  modalBody: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  modalEmpty: {
+    ...textStyles.body,
+    color: colors.neutral500,
+    textAlign: 'center',
+    paddingVertical: spacing.xl,
+  },
+  modalFootnote: {
+    ...textStyles.bodySmall,
+    color: colors.neutral500,
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
 })

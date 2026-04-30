@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 import { ClubPhotoManager } from "@/components/settings/ClubPhotoManager";
+import { MembershipRequirementsCard } from "@/components/settings/MembershipRequirementsCard";
 
 interface ClubData {
   id: string;
@@ -519,6 +520,9 @@ export default function SettingsPage() {
             )}
           </div>
         </div>
+
+        {/* Membership Requirements */}
+        {admin?.clubId && <MembershipRequirementsCard clubId={admin.clubId} />}
 
         {/* Club Photos */}
         {admin?.clubId && <ClubPhotoManager clubId={admin.clubId} />}

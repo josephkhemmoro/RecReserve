@@ -38,7 +38,7 @@ export const useClubProfileStore = create((set) => ({
             .limit(20),
           supabase
             .from('membership_tiers')
-            .select('id, name, discount_percent, can_book_free, color')
+            .select('id, name, discount_percent, can_book_free, color, benefits')
             .eq('club_id', clubId),
           supabase
             .from('memberships')

@@ -32,14 +32,104 @@ serve(async (req) => {
       );
     }
 
-    const { amount, court_id, user_id, club_id, date, start_time, end_time } =
-      await req.json();
+    const {
+      amount: rawAmount,
+      court_id,
+      user_id,
+      club_id,
+      date,
+      start_time,
+      end_time,
+      reward_id,
+    } = await req.json();
 
-    if (!amount || amount <= 0) {
+    if (!rawAmount || rawAmount <= 0) {
       return new Response(
         JSON.stringify({ error: "Valid amount is required" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // --- Optional reward handling ---
+    // Defensive: if reward_id is not provided, null, or empty string, behave exactly as before.
+    let amount: number = Number(rawAmount);
+    let rewardApplied = false;
+    let rewardSkipped = false;
+    let appliedRewardId: string | null = null;
+
+    if (reward_id && typeof reward_id === "string" && reward_id.trim().length > 0) {
+      const { data: reward, error: rewardError } = await supabase
+        .from("player_rewards")
+        .select("id, user_id, reward_type, reward_value, redeemed_at, expires_at")
+        .eq("id", reward_id)
+        .maybeSingle();
+
+      if (rewardError || !reward) {
+        return new Response(
+          JSON.stringify({ error: "Reward is not available" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify ownership — must belong to the authenticated user
+      if (reward.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: "Reward is not available" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify unredeemed
+      if (reward.redeemed_at) {
+        return new Response(
+          JSON.stringify({ error: "Reward is not available" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify not expired
+      if (reward.expires_at && new Date(reward.expires_at).getTime() <= Date.now()) {
+        return new Response(
+          JSON.stringify({ error: "Reward is not available" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (reward.reward_type === "discount_percent") {
+        const pct = Math.max(0, Math.min(100, Number(reward.reward_value) || 0));
+        amount = Math.floor((Number(rawAmount) * (100 - pct)) / 100);
+        rewardApplied = true;
+        appliedRewardId = reward.id;
+
+        // Free via 100% discount → short-circuit, skip creating a payment intent
+        if (amount <= 0) {
+          return new Response(
+            JSON.stringify({
+              clientSecret: null,
+              paymentIntentId: null,
+              reward_applied: true,
+              discounted_amount: 0,
+              final_amount: 0,
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else if (reward.reward_type === "free_booking") {
+        // Skip the PaymentSheet step entirely — client should create the reservation with no payment.
+        return new Response(
+          JSON.stringify({
+            clientSecret: null,
+            paymentIntentId: null,
+            reward_applied: true,
+            final_amount: 0,
+            discounted_amount: 0,
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else if (reward.reward_type === "bonus_credit") {
+        // Not applied here — handled client-side differently.
+        rewardSkipped = true;
+      }
     }
 
     // Create Stripe payment intent via REST API directly (no SDK needed)
@@ -62,6 +152,9 @@ serve(async (req) => {
     formParams.append("metadata[date]", date ?? "");
     formParams.append("metadata[start_time]", start_time ?? "");
     formParams.append("metadata[end_time]", end_time ?? "");
+    if (appliedRewardId) {
+      formParams.append("metadata[reward_id]", appliedRewardId);
+    }
 
     if (club?.stripe_account_id && club?.stripe_onboarding_complete) {
       const applicationFee = Math.round(amount * (PLATFORM_FEE_PERCENT / 100));
@@ -92,6 +185,9 @@ serve(async (req) => {
       JSON.stringify({
         clientSecret: stripeData.client_secret,
         paymentIntentId: stripeData.id,
+        reward_applied: rewardApplied,
+        reward_skipped: rewardSkipped,
+        discounted_amount: amount,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
