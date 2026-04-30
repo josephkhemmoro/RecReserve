@@ -152,6 +152,7 @@ serve(async (req) => {
     formParams.append("metadata[date]", date ?? "");
     formParams.append("metadata[start_time]", start_time ?? "");
     formParams.append("metadata[end_time]", end_time ?? "");
+    formParams.append("metadata[entity_type]", "reservation");
     if (appliedRewardId) {
       formParams.append("metadata[reward_id]", appliedRewardId);
     }

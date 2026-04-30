@@ -19,7 +19,6 @@ serve(async (req) => {
   }
 
   try {
-    // Verify the user is authenticated
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
@@ -37,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    const { payment_intent_id, reservation_id } = await req.json();
+    const { payment_intent_id, reservation_id, amount_cents, reason } = await req.json();
 
     if (!payment_intent_id) {
       return new Response(
@@ -46,39 +45,78 @@ serve(async (req) => {
       );
     }
 
-    // Check if this payment has a transfer (Connect payment) by looking at the PaymentIntent
     const paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
     const hasTransfer = !!paymentIntent.transfer_data?.destination;
 
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: payment_intent_id,
     };
-
-    // If it was a Connect payment, reverse the transfer to claw back from the club
+    if (typeof amount_cents === "number" && amount_cents > 0) {
+      refundParams.amount = amount_cents;
+    }
     if (hasTransfer) {
       refundParams.reverse_transfer = true;
-      refundParams.refund_application_fee = false; // platform keeps fee — change to true if you want to refund it
+      refundParams.refund_application_fee = false;
     }
 
     const refund = await stripe.refunds.create(refundParams);
 
-    // Update reservation with refund info
-    if (reservation_id) {
-      const supabase = getServiceClient();
+    // Update payment_records — find by PI id
+    const { data: payment } = await supabase
+      .from("payment_records")
+      .select("id, amount_cents, refund_amount_cents")
+      .eq("stripe_payment_intent_id", payment_intent_id)
+      .maybeSingle();
+
+    if (payment) {
+      const totalRefunded = (payment.refund_amount_cents || 0) + refund.amount;
+      const isPartial = totalRefunded < payment.amount_cents;
       await supabase
-        .from("reservations")
-        .update({ stripe_refund_id: refund.id })
-        .eq("id", reservation_id);
+        .from("payment_records")
+        .update({
+          status: isPartial ? "partially_refunded" : "refunded",
+          stripe_refund_id: refund.id,
+          refund_amount_cents: totalRefunded,
+          refund_reason: reason || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", payment.id);
+    }
+
+    // Audit log if we know the reservation
+    if (reservation_id) {
+      try {
+        const { data: res } = await supabase
+          .from("reservations")
+          .select("club_id")
+          .eq("id", reservation_id)
+          .maybeSingle();
+        if (res?.club_id) {
+          await supabase.from("audit_logs").insert({
+            club_id: res.club_id,
+            actor_id: user.id,
+            action: "refund.create",
+            entity_type: "reservation",
+            entity_id: reservation_id,
+            changes: {
+              stripe_refund_id: { old: null, new: refund.id },
+              refund_amount_cents: { old: null, new: refund.amount },
+            },
+          });
+        }
+      } catch (auditErr) {
+        console.warn("Refund audit log failed (non-blocking):", auditErr);
+      }
     }
 
     return new Response(
-      JSON.stringify({ success: true, refund_id: refund.id }),
+      JSON.stringify({ success: true, refund_id: refund.id, refund_amount_cents: refund.amount }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("Error processing refund:", err);
     return new Response(
-      JSON.stringify({ error: err.message ?? "Internal server error" }),
+      JSON.stringify({ error: (err as Error).message ?? "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

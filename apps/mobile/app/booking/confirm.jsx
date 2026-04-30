@@ -229,25 +229,68 @@ export default function BookingConfirmScreen() {
         }
       }
 
-      // Step 3: Create reservation directly (validated by step 1)
+      // Step 3: Create reservation atomically via finalize-booking edge function.
+      // Server-side: re-validates, idempotency check, verifies Stripe PI succeeded,
+      // inserts reservation + payment_records + audit log + notification in one call.
       const bookingIsFree = isFree || rewardAppliedFree
-      const { data: insertedRes, error: resErr } = await supabase
-        .from('reservations')
-        .insert({
-          court_id: selectedCourt.id,
-          user_id: user?.id,
-          club_id: selectedClub?.id,
-          start_time: startDT,
-          end_time: endDT,
-          status: 'confirmed',
-          stripe_payment_id: bookingIsFree ? null : paymentIntentId,
-          amount_paid: bookingIsFree ? 0 : finalPrice,
-          validated_at: new Date().toISOString(),
+      let insertedResId = null
+      let finalizeData = null
+      let finalizeInvokeError = null
+      try {
+        const result = await supabase.functions.invoke('finalize-booking', {
+          body: {
+            court_id: selectedCourt.id,
+            club_id: selectedClub?.id,
+            start_time: startDT,
+            end_time: endDT,
+            guest_count: 0,
+            stripe_payment_intent_id: bookingIsFree ? null : paymentIntentId,
+            amount_cents: bookingIsFree ? 0 : Math.round(finalPrice * 100),
+            is_free: bookingIsFree,
+            idempotency_key: idempotencyKey,
+          },
         })
-        .select('id')
-        .single()
+        finalizeData = result.data
+        finalizeInvokeError = result.error
+      } catch (invokeCatch) {
+        finalizeInvokeError = invokeCatch
+      }
 
-      if (resErr) throw new Error('Failed to create reservation: ' + resErr.message)
+      // If finalize returned a structured application error (validation, payment verify),
+      // surface it directly — do NOT fall back to direct insert (would bypass server checks).
+      if (finalizeData?.error) {
+        const detail = Array.isArray(finalizeData.errors) && finalizeData.errors.length
+          ? finalizeData.errors.map((e) => e.message || e).join('\n')
+          : finalizeData.error
+        throw new Error(detail)
+      }
+
+      if (finalizeData?.reservation_id) {
+        insertedResId = finalizeData.reservation_id
+      } else {
+        // Infrastructure failure (function unreachable). Payment is already captured,
+        // so attempt a direct insert as a last-ditch fallback to avoid an orphaned charge.
+        console.warn('finalize-booking unavailable, falling back to direct insert:', finalizeInvokeError?.message)
+        const { data: insertedRes, error: resErr } = await supabase
+          .from('reservations')
+          .insert({
+            court_id: selectedCourt.id,
+            user_id: user?.id,
+            club_id: selectedClub?.id,
+            start_time: startDT,
+            end_time: endDT,
+            status: 'confirmed',
+            stripe_payment_id: bookingIsFree ? null : paymentIntentId,
+            amount_paid: bookingIsFree ? 0 : finalPrice,
+            validated_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single()
+
+        if (resErr) throw new Error('Failed to create reservation: ' + resErr.message)
+        insertedResId = insertedRes?.id
+      }
+      const insertedRes = insertedResId ? { id: insertedResId } : null
 
       // Step 4: Mark reward redeemed, if one was used.
       if (selectedReward && insertedRes?.id) {
