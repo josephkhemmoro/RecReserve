@@ -91,6 +91,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { admin } = useAdminClub();
   const [authorized, setAuthorized] = useState(false);
   const [stripeState, setStripeState] = useState<StripeState>("loading");
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -98,7 +99,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const supabase = createClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) { router.replace("/login"); return; }
-        const { data: profile } = await supabase.from("users").select("role, club_id").eq("id", session.user.id).single();
+        const { data: profile } = await supabase.from("users").select("role, club_id, is_platform_admin").eq("id", session.user.id).single();
         if (profile?.role !== "admin") { await supabase.auth.signOut(); router.replace("/login"); return; }
         if (!profile?.club_id && pathname !== "/onboarding") { router.replace("/onboarding"); return; }
         if (profile?.club_id) {
@@ -107,6 +108,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           else if (club?.stripe_account_id) setStripeState("pending");
           else setStripeState("not_connected");
         }
+        setIsPlatformAdmin(!!profile?.is_platform_admin);
         setAuthorized(true);
       } catch { router.replace("/login"); }
     };
@@ -182,6 +184,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </span>
               </div>
             </div>
+          )}
+          {isPlatformAdmin && (
+            <Link
+              href="/platform"
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-sm font-medium text-amber-300 hover:text-amber-200 text-left transition-colors"
+              style={{ background: "rgba(245,158,11,0.1)" }}
+            >
+              <span className="text-base">⚡</span>
+              Platform Admin
+            </Link>
           )}
           <button
             onClick={handleSignOut}
