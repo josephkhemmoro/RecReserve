@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
+import { CheckCircle2, Building2, UserPlus, Sparkles, ArrowRight } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Card, PageHeader, Button, FormInput } from "@/components/ui";
 
@@ -103,22 +105,32 @@ export default function CreateClubPage() {
     const loginUrl = typeof window !== "undefined" ? `${window.location.origin}/login` : "/login";
     return (
       <div className="max-w-2xl mx-auto">
-        <PageHeader title="Club Created" subtitle={result.clubName} />
+        <PageHeader eyebrow="Platform" title="Club Created" subtitle={`${result.clubName} is live and ready for ${result.inviteName}.`} />
 
         <Card>
-          <div className="space-y-4">
-            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-              <p className="text-sm font-semibold text-emerald-900">✓ {result.clubName} is live</p>
-              <p className="text-xs text-emerald-800 mt-1">
-                Status: active · Platform fee: 5% · Stripe Connect: not yet onboarded
-                {existingUserPromoted && <> · {result.inviteEmail} promoted to admin</>}
-              </p>
+          <div className="space-y-5">
+            <div className="relative overflow-hidden p-5 rounded-xl bg-gradient-to-br from-emerald-50 via-emerald-50/60 to-white border border-emerald-200/70">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 h-10 w-10 rounded-full bg-emerald-100 flex items-center justify-center ring-1 ring-emerald-200">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-emerald-900">{result.clubName} is live</p>
+                  <p className="text-xs text-emerald-800/80 mt-1 leading-relaxed">
+                    Status: active · Platform fee: 5% · Stripe Connect: not yet onboarded
+                    {existingUserPromoted && <> · {result.inviteEmail} promoted to admin</>}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {existingUserPromoted ? (
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 mb-2">Send this to {result.inviteName}:</h3>
-                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 whitespace-pre-line">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-brand" />
+                  Send this to {result.inviteName}
+                </h3>
+                <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-700 whitespace-pre-line font-mono leading-relaxed">
 {`Hi ${result.inviteName},
 
 Your RecReserve admin account is ready. Sign in at ${loginUrl} with ${result.inviteEmail} and your existing password — you'll land directly on your club's admin dashboard.
@@ -130,22 +142,33 @@ Let me know if you hit any issues.`}
               </div>
             ) : (
               <div>
-                <h3 className="text-sm font-semibold text-slate-900 mb-2">Two-step handoff (since {result.inviteEmail} doesn&apos;t have an account yet):</h3>
-                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900 space-y-2">
-                  <p><strong>Step 1.</strong> Send this signup invite to {result.inviteName}:</p>
-                  <div className="p-3 rounded bg-white border border-amber-100 whitespace-pre-line text-slate-700 text-xs">
+                <h3 className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
+                  <UserPlus className="h-4 w-4 text-amber-600" />
+                  Two-step handoff
+                </h3>
+                <p className="text-xs text-slate-500 mb-3">{result.inviteEmail} doesn&apos;t have an account yet, so we couldn&apos;t auto-promote.</p>
+                <div className="p-4 rounded-lg bg-amber-50/60 border border-amber-200/60 text-sm space-y-3">
+                  <div>
+                    <p className="text-xs font-bold text-amber-900 mb-2 uppercase tracking-wider">Step 1 — Send this invite</p>
+                    <div className="p-3 rounded-md bg-white border border-amber-100 whitespace-pre-line text-slate-700 text-xs font-mono leading-relaxed">
 {`Hi ${result.inviteName},
 
 Sign up at ${loginUrl} using ${result.inviteEmail}. Once you've created your account, let me know and I'll finalize your admin access.`}
+                    </div>
                   </div>
-                  <p className="pt-2"><strong>Step 2.</strong> After they sign up, come back to <Link href={`/platform/clubs/${result.clubId}`} className="underline font-semibold">this club&apos;s detail page</Link> and click &quot;Promote to Admin&quot; with their email.</p>
+                  <div className="pt-2 border-t border-amber-200/40">
+                    <p className="text-xs font-bold text-amber-900 mb-1 uppercase tracking-wider">Step 2 — After they sign up</p>
+                    <p className="text-xs text-amber-900 leading-relaxed">
+                      Come back to <Link href={`/platform/clubs/${result.clubId}`} className="underline font-semibold">this club&apos;s detail page</Link> and click &quot;Promote to Admin&quot;.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-wrap gap-2 pt-2">
               <Link href={`/platform/clubs/${result.clubId}`}>
-                <Button variant="primary">View Club</Button>
+                <Button variant="primary" icon={<ArrowRight />}>View Club</Button>
               </Link>
               <Link href="/platform/clubs">
                 <Button variant="secondary">Back to Clubs</Button>
@@ -169,47 +192,62 @@ Sign up at ${loginUrl} using ${result.inviteEmail}. Once you've created your acc
 
   return (
     <div className="max-w-2xl mx-auto">
-      <PageHeader title="Create New Club" subtitle="Onboard a new pilot club to RecReserve" />
+      <PageHeader eyebrow="Platform" title="Create New Club" subtitle="Onboard a new pilot club to RecReserve in under 60 seconds." />
 
       <Card>
-        <div className="space-y-5">
+        <div className="space-y-6">
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Club Info</h3>
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="h-4 w-4 text-brand" />
+              <h3 className="text-sm font-bold text-slate-900">Club Info</h3>
+            </div>
             <div className="space-y-3">
               <FormInput label="Club name *" value={name} onChange={setName} placeholder="e.g. Westside Tennis & Pickleball" />
               <FormInput label="Location" value={location} onChange={setLocation} placeholder="City, State" />
-              <FormInput label="Phone" value={phone} onChange={setPhone} placeholder="(555) 555-5555" />
-              <FormInput label="Website" value={website} onChange={setWebsite} placeholder="https://..." />
+              <div className="grid grid-cols-2 gap-3">
+                <FormInput label="Phone" value={phone} onChange={setPhone} placeholder="(555) 555-5555" />
+                <FormInput label="Website" value={website} onChange={setWebsite} placeholder="https://..." />
+              </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100">
-            <h3 className="text-sm font-semibold text-slate-900 mb-3">Initial Admin</h3>
-            <p className="text-xs text-slate-500 mb-3">
+          <div className="pt-5 border-t border-slate-100">
+            <div className="flex items-center gap-2 mb-3">
+              <UserPlus className="h-4 w-4 text-brand" />
+              <h3 className="text-sm font-bold text-slate-900">Initial Admin</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
               If they already have an account, we&apos;ll promote them now. If not, they sign up first, then you click &quot;Promote to Admin&quot; on the club detail page.
             </p>
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
               <FormInput label="Admin name *" value={adminName} onChange={setAdminName} placeholder="Jane Doe" />
               <FormInput label="Admin email *" value={adminEmail} onChange={setAdminEmail} placeholder="jane@club.com" />
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="checkbox" checked={requirePaid} onChange={(e) => setRequirePaid(e.target.checked)} className="mt-1" />
+          <div className="pt-5 border-t border-slate-100">
+            <label className="flex items-start gap-3 cursor-pointer p-3 -m-3 rounded-lg hover:bg-slate-50 transition-colors">
+              <input
+                type="checkbox"
+                checked={requirePaid}
+                onChange={(e) => setRequirePaid(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-brand focus:ring-brand cursor-pointer"
+              />
               <div>
                 <p className="text-sm font-semibold text-slate-900">Require paid membership to join</p>
-                <p className="text-xs text-slate-500">Players must subscribe to a paid tier to book courts. You can toggle this later in club settings.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Players must subscribe to a paid tier to book courts. You can toggle this later in club settings.</p>
               </div>
             </label>
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 animate-fade-in-up">
+              <span className="font-semibold">Couldn&apos;t create club: </span>{error}
+            </div>
           )}
 
-          <div className="flex gap-3 pt-3 border-t border-slate-100">
-            <Button variant="primary" onClick={handleCreate} disabled={!canSubmit || saving}>
+          <div className="flex gap-3 pt-5 border-t border-slate-100">
+            <Button variant="primary" onClick={handleCreate} disabled={!canSubmit} loading={saving}>
               {saving ? "Creating…" : "Create Club"}
             </Button>
             <Button variant="secondary" onClick={() => router.push("/platform/clubs")} disabled={saving}>

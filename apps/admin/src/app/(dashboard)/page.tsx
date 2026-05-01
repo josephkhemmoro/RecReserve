@@ -6,6 +6,7 @@ import { useAdminClub } from "@/lib/useAdminClub";
 import { CourtOccupancyHeatMap } from "@/components/dashboard/CourtOccupancyHeatMap";
 import { RevenueByCourtChart } from "@/components/dashboard/RevenueByCourtChart";
 import { StatCard, Card, Badge, Button, PageHeader, SkeletonCard, SkeletonTableRow } from "@/components/ui";
+import { useConfirm } from "@/components/ui/Dialog";
 import { localDayStart, localDayEnd, localMonthStart } from "@/lib/dateUtils";
 import {
   getDashboardTrends,
@@ -64,6 +65,7 @@ export default function DashboardPage() {
     occupancyPercent: number;
   }>({ courts: [], occupancyPercent: 0 });
   const [revenueData, setRevenueData] = useState<CourtRevenue[]>([]);
+  const confirm = useConfirm();
   const [markingNoShow, setMarkingNoShow] = useState<string | null>(null);
   const [setupChecklist, setSetupChecklist] = useState<{ courts: boolean; tiers: boolean; rules: boolean; stripe: boolean } | null>(null);
   const [socialStats, setSocialStats] = useState({ gamesCreated: 0, gamesFilled: 0, groupsActive: 0, gameParticipants: 0 });
@@ -218,8 +220,13 @@ export default function DashboardPage() {
   }, [admin?.clubId]);
 
   const handleMarkNoShow = async (reservation: TodayReservation) => {
-    if (!confirm(`Mark ${reservation.user?.full_name || "this player"}'s reservation as a no-show?`))
-      return;
+    const ok = await confirm({
+      title: `Mark ${reservation.user?.full_name || "this player"} as no-show?`,
+      description: "The reservation will be flagged and the action is logged.",
+      confirmLabel: "Mark No-Show",
+      tone: "warning",
+    });
+    if (!ok) return;
 
     setMarkingNoShow(reservation.id);
     try {

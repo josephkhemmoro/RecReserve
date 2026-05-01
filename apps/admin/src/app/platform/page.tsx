@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { StatCard, Card, PageHeader, Badge, SkeletonCard } from "@/components/ui";
 import Link from "next/link";
+import { Building2, Users, CalendarDays, DollarSign, TrendingUp, ArrowRight, Plus, ExternalLink } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { StatCard, Card, PageHeader, Badge, SkeletonCard, Button, EmptyState } from "@/components/ui";
 
 interface Stats {
   totalClubs: number;
@@ -118,9 +119,20 @@ export default function PlatformOverviewPage() {
   if (loading || !stats) {
     return (
       <div>
-        <PageHeader title="Platform Overview" subtitle="All RecReserve clubs at a glance" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
+        <PageHeader eyebrow="Platform" title="Overview" subtitle="All RecReserve clubs at a glance" />
+        <div className="space-y-6">
+          <div>
+            <div className="h-3 w-16 animate-shimmer rounded mb-3" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`m-${i}`} />)}
+            </div>
+          </div>
+          <div>
+            <div className="h-3 w-32 animate-shimmer rounded mb-3" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`c-${i}`} />)}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -128,73 +140,110 @@ export default function PlatformOverviewPage() {
 
   return (
     <div>
-      <PageHeader title="Platform Overview" subtitle="All RecReserve clubs at a glance" />
+      <PageHeader
+        eyebrow="Platform"
+        title="Overview"
+        subtitle="All RecReserve clubs at a glance"
+        action={
+          <Link href="/platform/clubs/new">
+            <Button variant="primary" icon={<Plus />}>New Club</Button>
+          </Link>
+        }
+      />
 
-      <h2 className="text-sm font-semibold text-slate-700 mb-3 mt-2">Money</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Platform Fees (this month)" value={formatUsd(stats.platformFeesThisMonth)} />
-        <StatCard label="Platform Fees (all time)" value={formatUsd(stats.platformFeesAllTime)} />
-        <StatCard label="GMV (this month)" value={formatUsd(stats.gmvThisMonth)} />
-        <StatCard label="GMV (all time)" value={formatUsd(stats.gmvAllTime)} />
+      {/* Money section */}
+      <div className="flex items-center gap-2 mb-3 mt-2">
+        <DollarSign className="h-4 w-4 text-emerald-600" />
+        <h2 className="text-xs font-bold text-slate-600 uppercase tracking-widest">Money</h2>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard label="Fees (this month)" value={formatUsd(stats.platformFeesThisMonth)} icon={<TrendingUp />} accent="success" />
+        <StatCard label="Fees (all time)" value={formatUsd(stats.platformFeesAllTime)} icon={<DollarSign />} accent="success" />
+        <StatCard label="GMV (this month)" value={formatUsd(stats.gmvThisMonth)} accent="brand" />
+        <StatCard label="GMV (all time)" value={formatUsd(stats.gmvAllTime)} accent="brand" />
       </div>
 
-      <h2 className="text-sm font-semibold text-slate-700 mb-3">Clubs & Members</h2>
+      {/* Clubs & Members section */}
+      <div className="flex items-center gap-2 mb-3">
+        <Users className="h-4 w-4 text-brand" />
+        <h2 className="text-xs font-bold text-slate-600 uppercase tracking-widest">Clubs &amp; Members</h2>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Total Clubs" value={String(stats.totalClubs)} />
-        <StatCard label="Active Clubs" value={String(stats.activeClubs)} />
-        <StatCard label="Active Members" value={stats.totalMembers.toLocaleString()} />
-        <StatCard label="Reservations (this month)" value={stats.reservationsThisMonth.toLocaleString()} />
+        <StatCard label="Total Clubs" value={String(stats.totalClubs)} icon={<Building2 />} />
+        <StatCard label="Active Clubs" value={String(stats.activeClubs)} icon={<Building2 />} accent="success" />
+        <StatCard label="Active Members" value={stats.totalMembers.toLocaleString()} icon={<Users />} accent="brand" />
+        <StatCard label="Reservations (this month)" value={stats.reservationsThisMonth.toLocaleString()} icon={<CalendarDays />} />
       </div>
 
       {(stats.suspendedClubs > 0 || stats.archivedClubs > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {stats.suspendedClubs > 0 && <StatCard label="Suspended Clubs" value={String(stats.suspendedClubs)} />}
+          {stats.suspendedClubs > 0 && <StatCard label="Suspended Clubs" value={String(stats.suspendedClubs)} accent="warning" />}
           {stats.archivedClubs > 0 && <StatCard label="Archived Clubs" value={String(stats.archivedClubs)} />}
         </div>
       )}
 
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-slate-900">Recent Clubs</h2>
-          <Link href="/platform/clubs" className="text-sm font-semibold text-teal-600 hover:text-teal-700">
-            View all →
+      <Card noPadding>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Recent Clubs</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Latest 5 clubs onboarded</p>
+          </div>
+          <Link
+            href="/platform/clubs"
+            className="text-sm font-semibold text-brand hover:text-brand-dark inline-flex items-center gap-1 group"
+          >
+            View all
+            <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
         {recentClubs.length === 0 ? (
-          <p className="text-sm text-slate-500">No clubs yet. Onboard your first one.</p>
+          <EmptyState
+            icon={<Building2 />}
+            title="No clubs yet"
+            description="Onboard your first club to start accepting bookings."
+            action={
+              <Link href="/platform/clubs/new">
+                <Button variant="primary" icon={<Plus />}>Create First Club</Button>
+              </Link>
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                  <th className="py-2 pr-4">Club</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Stripe</th>
-                  <th className="py-2 pr-4">Members</th>
-                  <th className="py-2 pr-4">GMV (30d)</th>
-                  <th className="py-2 pr-4">Created</th>
+                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50/40">
+                  <th className="py-3 px-6">Club</th>
+                  <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Stripe</th>
+                  <th className="py-3 pr-4">Members</th>
+                  <th className="py-3 pr-4">GMV <span className="text-slate-400 normal-case font-medium">(30d)</span></th>
+                  <th className="py-3 pr-6">Created</th>
                 </tr>
               </thead>
               <tbody>
                 {recentClubs.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="py-3 pr-4">
-                      <Link href={`/platform/clubs/${c.id}`} className="font-medium text-slate-900 hover:text-teal-600">{c.name}</Link>
+                  <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3 px-6">
+                      <Link href={`/platform/clubs/${c.id}`} className="font-semibold text-slate-900 hover:text-brand inline-flex items-center gap-1.5 group">
+                        {c.name}
+                        <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
                     </td>
                     <td className="py-3 pr-4">
                       <Badge
                         label={c.platform_status}
+                        dot
                         variant={c.platform_status === "active" ? "success" : c.platform_status === "suspended" ? "warning" : "default"}
                       />
                     </td>
                     <td className="py-3 pr-4">
                       {c.stripe_onboarding_complete
-                        ? <Badge label="Connected" variant="success" />
-                        : <Badge label="Not connected" variant="default" />}
+                        ? <Badge label="Connected" variant="success" dot />
+                        : <Badge label="Pending" variant="default" />}
                     </td>
-                    <td className="py-3 pr-4 text-slate-700">{c.member_count}</td>
-                    <td className="py-3 pr-4 text-slate-700">{formatUsd(c.gmv_30d)}</td>
-                    <td className="py-3 pr-4 text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
+                    <td className="py-3 pr-4 text-slate-700 tabular-nums font-medium">{c.member_count}</td>
+                    <td className="py-3 pr-4 text-slate-700 tabular-nums font-medium">{formatUsd(c.gmv_30d)}</td>
+                    <td className="py-3 pr-6 text-slate-500 text-xs">{new Date(c.created_at).toLocaleDateString()}</td>
                   </tr>
                 ))}
               </tbody>

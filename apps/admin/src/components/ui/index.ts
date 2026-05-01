@@ -7,5 +7,6 @@ export { FormSelect } from "./FormSelect";
 export { FormTextarea } from "./FormTextarea";
 export { Modal } from "./Modal";
 export { EmptyState } from "./EmptyState";
-export { Skeleton, SkeletonCard, SkeletonTableRow } from "./Skeleton";
+export { Skeleton, SkeletonCard, SkeletonTableRow, SkeletonText } from "./Skeleton";
 export { StatCard } from "./StatCard";
+export { Dialog, ConfirmDialog, PromptDialog, useConfirm, usePrompt } from "./Dialog";
