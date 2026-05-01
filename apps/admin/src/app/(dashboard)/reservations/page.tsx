@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 import Link from "next/link";
 import { PageHeader, Card, Badge, Button, FormInput, FormSelect, EmptyState, SkeletonTableRow } from "@/components/ui";
+import { useConfirm } from "@/components/ui/Dialog";
 
 interface Reservation {
   id: string;
@@ -42,6 +44,7 @@ export default function ReservationsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const confirm = useConfirm();
 
   const fetchReservations = useCallback(async () => {
     if (!admin?.clubId) return;
@@ -94,12 +97,17 @@ export default function ReservationsPage() {
   }, [fetchReservations]);
 
   const handleMarkNoShow = async (id: string) => {
-    if (!confirm("Mark this reservation as a no-show? This will be logged.")) return;
+    const ok = await confirm({
+      title: "Mark as no-show?",
+      description: "The player won't be charged a fee automatically. This action is logged in the audit trail.",
+      confirmLabel: "Mark No-Show",
+      tone: "warning",
+    });
+    if (!ok) return;
     try {
       const supabase = createClient();
       await supabase.from("reservations").update({ status: "no_show" }).eq("id", id);
 
-      // Audit log
       if (admin?.userId && admin?.clubId) {
         await supabase.from("audit_logs").insert({
           club_id: admin.clubId,
@@ -113,13 +121,21 @@ export default function ReservationsPage() {
       }
 
       fetchReservations();
+      toast.success("Marked as no-show");
     } catch (err) {
-      console.error("Error marking no-show:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to mark no-show");
     }
   };
 
   const handleCancelReservation = async (id: string) => {
-    if (!confirm("Cancel this reservation? The member will be notified. This will be logged.")) return;
+    const ok = await confirm({
+      title: "Cancel this reservation?",
+      description: "The member will be notified. The action is logged.",
+      confirmLabel: "Cancel Reservation",
+      cancelLabel: "Keep Reservation",
+      tone: "danger",
+    });
+    if (!ok) return;
     try {
       const supabase = createClient();
       await supabase.from("reservations").update({
@@ -128,11 +144,9 @@ export default function ReservationsPage() {
         cancelled_by: admin?.userId,
       }).eq("id", id);
 
-      // Clean up open spots and participants for this reservation
       await supabase.from("open_spots").delete().eq("reservation_id", id);
       await supabase.from("reservation_participants").delete().eq("reservation_id", id);
 
-      // Audit log
       if (admin?.userId && admin?.clubId) {
         await supabase.from("audit_logs").insert({
           club_id: admin.clubId,
@@ -146,8 +160,9 @@ export default function ReservationsPage() {
       }
 
       fetchReservations();
+      toast.success("Reservation cancelled");
     } catch (err) {
-      console.error("Error cancelling:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to cancel");
     }
   };
 

@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell,
+} from "recharts";
+import { DollarSign, TrendingUp, RotateCcw, AlertCircle, ExternalLink } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { Card, PageHeader, StatCard, Badge, SkeletonCard } from "@/components/ui";
+import { Card, PageHeader, StatCard, Badge, SkeletonCard, EmptyState } from "@/components/ui";
 
 interface MonthlyRow {
   month: string; // "YYYY-MM"
@@ -157,8 +162,6 @@ export default function RevenuePage() {
     load();
   }, []);
 
-  const maxFees = Math.max(...monthly.map((m) => m.fees), 1);
-
   if (loading) {
     return (
       <div>
@@ -170,77 +173,169 @@ export default function RevenuePage() {
     );
   }
 
+  // Recharts data — each row in dollars (not cents) for cleaner Y-axis.
+  const chartData = monthly.map((m) => ({
+    label: m.label.split(" ")[0], // "Apr"
+    fullLabel: m.label,
+    fees: m.fees / 100,
+    gmv: m.gmv / 100,
+    payments: m.payments,
+  }));
+
+  const total12moFees = monthly.reduce((s, m) => s + m.fees, 0);
+  const total12moGmv = monthly.reduce((s, m) => s + m.gmv, 0);
+  const total12moPayments = monthly.reduce((s, m) => s + m.payments, 0);
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Revenue" subtitle="Platform fees and GMV across all clubs" />
+      <PageHeader eyebrow="Platform" title="Revenue" subtitle="Platform fees and GMV across all clubs" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Platform Fees (all time)" value={formatUsd(allTimeFees)} subtitle="Your earnings" />
-        <StatCard label="GMV (all time)" value={formatUsd(allTimeGmv)} subtitle="Gross merchandise volume" />
-        <StatCard label="Refunded (all time)" value={formatUsd(allTimeRefunded)} subtitle="Across all clubs" />
+        <StatCard label="Platform Fees (all time)" value={formatUsd(allTimeFees)} subtitle="Your earnings" icon={<DollarSign />} accent="success" />
+        <StatCard label="GMV (all time)" value={formatUsd(allTimeGmv)} subtitle="Gross merchandise volume" icon={<TrendingUp />} accent="brand" />
+        <StatCard label="Refunded (all time)" value={formatUsd(allTimeRefunded)} subtitle="Across all clubs" icon={<RotateCcw />} accent="warning" />
       </div>
 
       <Card>
-        <h2 className="text-base font-semibold text-slate-900 mb-4">Last 12 Months — Platform Fees</h2>
-        <div className="space-y-2">
-          {monthly.map((m) => {
-            const widthPct = (m.fees / maxFees) * 100;
-            return (
-              <div key={m.month} className="flex items-center gap-3">
-                <div className="w-20 text-xs text-slate-500 font-medium">{m.label}</div>
-                <div className="flex-1 h-7 bg-slate-50 rounded relative overflow-hidden">
-                  <div
-                    className="absolute inset-y-0 left-0 rounded transition-all"
-                    style={{ width: `${widthPct}%`, background: "#0D9488" }}
+        <div className="flex items-start justify-between mb-1">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Last 12 Months</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Platform fees + GMV by month</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">12mo Fees</p>
+            <p className="text-xl font-bold text-slate-900 tabular-nums">{formatUsd(total12moFees)}</p>
+          </div>
+        </div>
+        {total12moFees === 0 ? (
+          <EmptyState
+            icon={<DollarSign />}
+            title="No revenue yet"
+            description="Once your clubs start taking bookings, fees will show up here."
+          />
+        ) : (
+          <>
+            <div className="h-[260px] mt-4 -ml-2">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="feesGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#0D9488" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#0D9488" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gmvGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#94a3b8" stopOpacity={0.18} />
+                      <stop offset="95%" stopColor="#94a3b8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    axisLine={{ stroke: "#e2e8f0" }}
+                    tickLine={false}
                   />
-                  <div className="absolute inset-0 flex items-center justify-end px-2">
-                    <span className="text-xs font-semibold text-slate-700">
-                      {m.fees > 0 ? formatUsd(m.fees) : "—"}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-24 text-xs text-slate-500 text-right">{m.payments} pmt</div>
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "white",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      boxShadow: "0 8px 24px -8px rgba(15,23,42,0.12)",
+                    }}
+                    labelFormatter={(value, payload) => payload[0]?.payload?.fullLabel || value}
+                    formatter={(value: number, name: string) => {
+                      const formatted = `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                      const label = name === "fees" ? "Platform Fees" : "GMV";
+                      return [formatted, label];
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="gmv"
+                    stroke="#94a3b8"
+                    strokeWidth={1.5}
+                    fill="url(#gmvGradient)"
+                    name="gmv"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="fees"
+                    stroke="#0D9488"
+                    strokeWidth={2.5}
+                    fill="url(#feesGradient)"
+                    name="fees"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-xs">
+              <div>
+                <p className="text-slate-500 mb-0.5">12mo GMV</p>
+                <p className="font-bold text-slate-900 tabular-nums text-sm">{formatUsd(total12moGmv)}</p>
               </div>
-            );
-          })}
-        </div>
-        <div className="mt-4 pt-4 border-t border-slate-100 flex gap-6 text-xs text-slate-500">
-          <div>Total fees (12mo): <span className="font-semibold text-slate-900">{formatUsd(monthly.reduce((s, m) => s + m.fees, 0))}</span></div>
-          <div>Total GMV (12mo): <span className="font-semibold text-slate-900">{formatUsd(monthly.reduce((s, m) => s + m.gmv, 0))}</span></div>
-          <div>Total payments (12mo): <span className="font-semibold text-slate-900">{monthly.reduce((s, m) => s + m.payments, 0).toLocaleString()}</span></div>
-        </div>
+              <div>
+                <p className="text-slate-500 mb-0.5">12mo Fees</p>
+                <p className="font-bold text-brand tabular-nums text-sm">{formatUsd(total12moFees)}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 mb-0.5">12mo Payments</p>
+                <p className="font-bold text-slate-900 tabular-nums text-sm">{total12moPayments.toLocaleString()}</p>
+              </div>
+            </div>
+          </>
+        )}
       </Card>
 
-      <Card>
-        <h2 className="text-base font-semibold text-slate-900 mb-4">Top Clubs by GMV</h2>
+      <Card noPadding>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Top Clubs by GMV</h2>
+            <p className="text-xs text-slate-500 mt-0.5">All-time leaderboard</p>
+          </div>
+        </div>
         {topClubs.length === 0 ? (
-          <p className="text-sm text-slate-500">No payment data yet.</p>
+          <EmptyState icon={<DollarSign />} title="No payment data yet" description="Once clubs start taking bookings, the leaderboard fills in." />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                  <th className="py-2 pr-4">Rank</th>
-                  <th className="py-2 pr-4">Club</th>
-                  <th className="py-2 pr-4">GMV</th>
-                  <th className="py-2 pr-4">Platform Fees</th>
-                  <th className="py-2 pr-4">Payments</th>
-                  <th className="py-2 pr-4">Take Rate</th>
+                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50/40">
+                  <th className="py-3 px-6">Rank</th>
+                  <th className="py-3 pr-4">Club</th>
+                  <th className="py-3 pr-4">GMV</th>
+                  <th className="py-3 pr-4">Platform Fees</th>
+                  <th className="py-3 pr-4">Payments</th>
+                  <th className="py-3 pr-6">Take Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {topClubs.map((c, i) => {
                   const takeRate = c.gmv_cents > 0 ? ((c.fees_cents / c.gmv_cents) * 100).toFixed(1) : "0";
+                  const medal = i === 0 ? "bg-amber-100 text-amber-700 ring-amber-200" : i === 1 ? "bg-slate-100 text-slate-600 ring-slate-200" : i === 2 ? "bg-orange-100 text-orange-700 ring-orange-200" : "bg-slate-50 text-slate-500 ring-slate-200";
                   return (
-                    <tr key={c.club_id} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="py-3 pr-4 font-semibold text-slate-700">#{i + 1}</td>
-                      <td className="py-3 pr-4">
-                        <Link href={`/platform/clubs/${c.club_id}`} className="font-medium text-slate-900 hover:text-teal-600">{c.club_name}</Link>
+                    <tr key={c.club_id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3 px-6">
+                        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ring-1 ring-inset ${medal}`}>
+                          {i + 1}
+                        </span>
                       </td>
-                      <td className="py-3 pr-4 text-slate-900 font-medium">{formatUsd(c.gmv_cents)}</td>
-                      <td className="py-3 pr-4 text-slate-700">{formatUsd(c.fees_cents)}</td>
-                      <td className="py-3 pr-4 text-slate-500">{c.payment_count}</td>
-                      <td className="py-3 pr-4 text-slate-500">{takeRate}%</td>
+                      <td className="py-3 pr-4">
+                        <Link href={`/platform/clubs/${c.club_id}`} className="font-semibold text-slate-900 hover:text-brand inline-flex items-center gap-1.5 group">
+                          {c.club_name}
+                          <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </Link>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-900 font-semibold tabular-nums">{formatUsd(c.gmv_cents)}</td>
+                      <td className="py-3 pr-4 text-brand font-semibold tabular-nums">{formatUsd(c.fees_cents)}</td>
+                      <td className="py-3 pr-4 text-slate-500 tabular-nums">{c.payment_count}</td>
+                      <td className="py-3 pr-6 text-slate-700 tabular-nums font-medium">{takeRate}%</td>
                     </tr>
                   );
                 })}
@@ -250,41 +345,52 @@ export default function RevenuePage() {
         )}
       </Card>
 
-      <Card>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-slate-900">Watchlist — Failed & Disputed</h2>
-          <span className="text-xs text-slate-500">Most recent 20</span>
+      <Card noPadding>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              Watchlist
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Failed and disputed payments — most recent 20</p>
+          </div>
         </div>
         {disputes.length === 0 ? (
-          <p className="text-sm text-slate-500">No failed or disputed payments. 🎉</p>
+          <EmptyState
+            title="All clear"
+            description="No failed or disputed payments across any club."
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                  <th className="py-2 pr-4">Date</th>
-                  <th className="py-2 pr-4">Club</th>
-                  <th className="py-2 pr-4">Amount</th>
-                  <th className="py-2 pr-4">Status</th>
-                  <th className="py-2 pr-4">Reason</th>
-                  <th className="py-2 pr-4">Stripe</th>
+                <tr className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-100 bg-slate-50/40">
+                  <th className="py-3 px-6">Date</th>
+                  <th className="py-3 pr-4">Club</th>
+                  <th className="py-3 pr-4">Amount</th>
+                  <th className="py-3 pr-4">Status</th>
+                  <th className="py-3 pr-4">Reason</th>
+                  <th className="py-3 pr-6">Stripe</th>
                 </tr>
               </thead>
               <tbody>
                 {disputes.map((d) => (
-                  <tr key={d.id} className="border-b border-slate-50">
-                    <td className="py-2 pr-4 text-slate-600">{new Date(d.created_at).toLocaleString()}</td>
-                    <td className="py-2 pr-4">
-                      <Link href={`/platform/clubs/${d.club_id}`} className="text-slate-900 hover:text-teal-600">{d.club_name}</Link>
+                  <tr key={d.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                    <td className="py-3 px-6 text-slate-600 text-xs tabular-nums">{new Date(d.created_at).toLocaleString()}</td>
+                    <td className="py-3 pr-4">
+                      <Link href={`/platform/clubs/${d.club_id}`} className="text-slate-900 hover:text-brand font-medium">{d.club_name}</Link>
                     </td>
-                    <td className="py-2 pr-4 text-slate-900 font-medium">{formatUsd(d.amount_cents)}</td>
-                    <td className="py-2 pr-4">
-                      <Badge label={d.status} variant={d.status === "disputed" ? "error" : "warning"} />
+                    <td className="py-3 pr-4 text-slate-900 font-semibold tabular-nums">{formatUsd(d.amount_cents)}</td>
+                    <td className="py-3 pr-4">
+                      <Badge label={d.status} variant={d.status === "disputed" ? "error" : "warning"} dot />
                     </td>
-                    <td className="py-2 pr-4 text-slate-700 max-w-xs truncate">{d.failure_reason || "—"}</td>
-                    <td className="py-2 pr-4">
+                    <td className="py-3 pr-4 text-slate-600 text-xs max-w-xs truncate">{d.failure_reason || "—"}</td>
+                    <td className="py-3 pr-6">
                       {d.stripe_payment_intent_id && (
-                        <a href={`https://dashboard.stripe.com/payments/${d.stripe_payment_intent_id}`} target="_blank" rel="noreferrer" className="text-xs text-teal-600 hover:text-teal-700">View →</a>
+                        <a href={`https://dashboard.stripe.com/payments/${d.stripe_payment_intent_id}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand hover:text-brand-dark font-semibold">
+                          View
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
                       )}
                     </td>
                   </tr>

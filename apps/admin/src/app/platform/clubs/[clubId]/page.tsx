@@ -3,8 +3,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
+import { ArrowLeft, Users, CalendarDays, DollarSign, TrendingUp, Building2, ExternalLink } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { Card, PageHeader, Button, Badge, StatCard, FormInput } from "@/components/ui";
+import { useConfirm, usePrompt } from "@/components/ui/Dialog";
 
 interface ClubDetail {
   id: string;
@@ -56,7 +59,8 @@ export default function ClubDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [promoteEmail, setPromoteEmail] = useState("");
-  const [promoteResult, setPromoteResult] = useState<string>("");
+  const confirm = useConfirm();
+  const prompt = usePrompt();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -127,36 +131,70 @@ export default function ClubDetailPage() {
         }).catch(() => {});
       }
       await fetchData();
+      toast.success(
+        newStatus === "active" ? "Club reactivated" : newStatus === "suspended" ? "Club suspended" : "Club archived"
+      );
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed");
+      toast.error(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusy(false);
     }
   };
 
-  const handleSuspend = () => {
-    const reason = prompt(`Suspend "${club?.name}"? Players won't be able to make new bookings or memberships. Existing reservations are honored.\n\nReason (optional):`);
+  const handleSuspend = async () => {
+    if (!club) return;
+    const reason = await prompt({
+      title: `Suspend ${club.name}?`,
+      description: "Players won't be able to make new bookings or memberships. Existing reservations are honored.",
+      placeholder: "Reason (optional)",
+      confirmLabel: "Suspend Club",
+      tone: "warning",
+      multiline: true,
+    });
     if (reason === null) return;
-    updateStatus("suspended", reason || undefined);
+    await updateStatus("suspended", reason || undefined);
   };
 
-  const handleReactivate = () => {
-    if (!confirm(`Reactivate "${club?.name}"?`)) return;
-    updateStatus("active");
+  const handleReactivate = async () => {
+    if (!club) return;
+    const ok = await confirm({
+      title: `Reactivate ${club.name}?`,
+      description: "New bookings and memberships will be allowed again.",
+      confirmLabel: "Reactivate",
+    });
+    if (!ok) return;
+    await updateStatus("active");
   };
 
-  const handleArchive = () => {
-    const message = `ARCHIVE "${club?.name}"?\n\nThis is offboarding. New bookings + memberships blocked permanently. Historical data preserved.\n\n${stats.upcoming} upcoming reservation(s) will NOT be auto-cancelled. Refund those first if needed.\n\nType "archive" to confirm:`;
-    const confirmation = prompt(message);
-    if (confirmation !== "archive") return;
-    const reason = prompt("Archive reason:");
-    updateStatus("archived", reason || undefined);
+  const handleArchive = async () => {
+    if (!club) return;
+    const upcomingNote = stats.upcoming > 0
+      ? `${stats.upcoming} upcoming reservation${stats.upcoming > 1 ? "s" : ""} will NOT be auto-cancelled. Refund them first if needed.`
+      : "No upcoming reservations to worry about.";
+    const confirmation = await prompt({
+      title: `Archive ${club.name}?`,
+      description: `Permanent offboarding. New bookings + memberships blocked. Historical data preserved. ${upcomingNote}`,
+      placeholder: 'Type "archive" to confirm',
+      requireTypedConfirmation: "archive",
+      confirmLabel: "Archive Club",
+      tone: "danger",
+    });
+    if (confirmation === null) return;
+    const reason = await prompt({
+      title: "Archive reason",
+      description: "Optional — for the audit log.",
+      placeholder: "e.g. left platform, non-payment",
+      confirmLabel: "Save & Archive",
+      tone: "danger",
+      multiline: true,
+    });
+    if (reason === null) return;
+    await updateStatus("archived", reason || undefined);
   };
 
   const handlePromote = async () => {
     if (!club || !promoteEmail.trim()) return;
     setBusy(true);
-    setPromoteResult("");
     try {
       const supabase = createClient();
       const email = promoteEmail.trim().toLowerCase();
@@ -168,7 +206,9 @@ export default function ClubDetailPage() {
 
       if (lookupError) throw lookupError;
       if (!user) {
-        setPromoteResult(`No account found for ${email}. They need to sign up at /login first.`);
+        toast.error(`No account found for ${email}`, {
+          description: "They need to sign up at /login first, then you can promote them.",
+        });
         return;
       }
 
@@ -187,10 +227,12 @@ export default function ClubDetailPage() {
         }).catch(() => {});
       }
       setPromoteEmail("");
-      setPromoteResult(`✓ ${user.full_name || email} is now an admin of ${club.name}.`);
+      toast.success(`${user.full_name || email} is now an admin`, {
+        description: `They can sign in and manage ${club.name}.`,
+      });
       await fetchData();
     } catch (err: unknown) {
-      setPromoteResult(`Error: ${err instanceof Error ? err.message : "Failed to promote"}`);
+      toast.error(err instanceof Error ? err.message : "Failed to promote user");
     } finally {
       setBusy(false);
     }
@@ -199,16 +241,26 @@ export default function ClubDetailPage() {
   if (loading) {
     return (
       <div>
-        <PageHeader title="Loading…" subtitle="" />
+        <div className="h-9 w-48 animate-shimmer rounded-lg mb-3" />
+        <div className="h-5 w-72 animate-shimmer rounded-md mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-28 animate-shimmer rounded-xl" />
+          ))}
+        </div>
       </div>
     );
   }
 
   if (!club) {
     return (
-      <div>
-        <PageHeader title="Club not found" subtitle="" />
-        <Link href="/platform/clubs"><Button variant="secondary">Back to Clubs</Button></Link>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="h-14 w-14 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 mb-4">
+          <Building2 className="h-6 w-6" />
+        </div>
+        <p className="text-base font-semibold text-slate-900 mb-1">Club not found</p>
+        <p className="text-sm text-slate-500 mb-5">It may have been deleted or you don&apos;t have access.</p>
+        <Link href="/platform/clubs"><Button variant="secondary" icon={<ArrowLeft />}>Back to Clubs</Button></Link>
       </div>
     );
   }
@@ -248,10 +300,10 @@ export default function ClubDetailPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Active Members" value={String(stats.members)} />
-        <StatCard label="Reservations (30d)" value={String(stats.reservations30d)} />
-        <StatCard label="GMV (30d)" value={formatUsd(stats.gmv30dCents)} />
-        <StatCard label="Platform Fees Earned" value={formatUsd(stats.feesAllTimeCents)} />
+        <StatCard label="Active Members" value={String(stats.members)} icon={<Users />} accent="brand" />
+        <StatCard label="Reservations (30d)" value={String(stats.reservations30d)} icon={<CalendarDays />} />
+        <StatCard label="GMV (30d)" value={formatUsd(stats.gmv30dCents)} icon={<DollarSign />} accent="success" />
+        <StatCard label="Platform Fees Earned" value={formatUsd(stats.feesAllTimeCents)} icon={<TrendingUp />} accent="success" />
       </div>
 
       <Card>
@@ -310,9 +362,6 @@ export default function ClubDetailPage() {
               Promote
             </Button>
           </div>
-          {promoteResult && (
-            <p className={`text-xs ${promoteResult.startsWith("✓") ? "text-emerald-700" : "text-red-700"}`}>{promoteResult}</p>
-          )}
         </div>
       </Card>
 

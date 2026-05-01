@@ -2,7 +2,7 @@
 
 :root {
   --background: #f8f9fb;
-  --foreground: #171717;
+  --foreground: #0f172a;
 }
 
 @theme inline {
@@ -26,7 +26,7 @@
   /* Surfaces */
   --color-page: #f8f9fb;
   --color-card: #ffffff;
-  --color-sidebar: #0f172a;
+  --color-sidebar: #0c1220;
   --color-sidebar-hover: #1e293b;
 
   /* Semantic */
@@ -43,16 +43,108 @@
 body {
   background: var(--color-page);
   color: var(--foreground);
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
+/* Improve focus rings — subtle, accessible */
+*:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-brand-muted);
+  color: var(--color-brand-dark);
+}
+
+/* Skeleton shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
-
 .animate-shimmer {
-  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background: linear-gradient(90deg, #f1f5f9 25%, #e8eef4 50%, #f1f5f9 75%);
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+/* Subtle fade + slide-up on mount, used by cards/dialogs */
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fade-in-up 200ms ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fade-in { animation: fade-in 150ms ease-out; }
+
+/* Radix dialog / dropdown animations */
+@keyframes overlay-show {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes content-show {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes content-hide {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+}
+.dialog-overlay { animation: overlay-show 150ms ease-out; }
+.dialog-content { animation: content-show 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.dialog-content[data-state="closed"] { animation: content-hide 120ms ease-in; }
+
+/* Subtle card hover — scoped via .card-hover */
+.card-hover {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out, border-color 200ms ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -8px rgba(15, 23, 42, 0.12), 0 2px 4px -2px rgba(15, 23, 42, 0.08);
+  border-color: rgb(226 232 240);
+}
+
+/* Button press feedback */
+.btn-press {
+  transition: transform 80ms ease-out, box-shadow 200ms ease-out, background-color 150ms ease-out, opacity 120ms ease-out;
+}
+.btn-press:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Sidebar nav link */
+.nav-link-active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background: var(--color-brand-light);
+  border-radius: 0 2px 2px 0;
+}
+
+/* Hide scrollbar but keep scrolling */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Grid background pattern (used on hero / overview header) */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
 }
