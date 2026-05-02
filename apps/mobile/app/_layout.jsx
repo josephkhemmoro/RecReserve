@@ -1,9 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
-import { View, Text, StyleSheet, Linking } from 'react-native'
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
-import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { Toaster } from 'sonner-native'
+import { ActivityIndicator, View, StyleSheet, Linking } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { StripeProvider } from '@stripe/stripe-react-native'
 import { supabase } from '../lib/supabase'
@@ -13,23 +10,19 @@ import { useClubStore } from '../store/clubStore'
 import { useMembershipStore } from '../store/membershipStore'
 import { ErrorBoundary } from '../components/ui/ErrorBoundary'
 import { NetworkToast } from '../components/ui/NetworkToast'
-import { colors } from '../theme'
 
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ErrorBoundary>
-        <StripeProvider
-          publishableKey={STRIPE_PUBLISHABLE_KEY}
-          merchantIdentifier="merchant.com.recreserve"
-        >
-          <RootLayoutInner />
-          <Toaster position="top-center" richColors />
-        </StripeProvider>
-      </ErrorBoundary>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <StripeProvider
+        publishableKey={STRIPE_PUBLISHABLE_KEY}
+        merchantIdentifier="merchant.com.recreserve"
+      >
+        <RootLayoutInner />
+      </StripeProvider>
+    </ErrorBoundary>
   )
 }
 
@@ -273,17 +266,9 @@ function RootLayoutInner() {
 
   if (loading) {
     return (
-      <Animated.View
-        entering={FadeIn.duration(300)}
-        exiting={FadeOut.duration(250)}
-        style={styles.splash}
-      >
-        <View style={styles.splashLogo}>
-          <Text style={styles.splashIcon}>R</Text>
-        </View>
-        <Text style={styles.splashTitle}>RecReserve</Text>
-        <View style={styles.splashSpinner} />
-      </Animated.View>
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#0D9488" />
+      </View>
     )
   }
 
@@ -301,40 +286,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-  },
-  splash: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    gap: 16,
-  },
-  splashLogo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  splashIcon: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  splashTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  splashSpinner: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderTopColor: '#ffffff',
-    marginTop: 16,
   },
 })

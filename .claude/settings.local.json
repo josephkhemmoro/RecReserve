@@ -34,13 +34,7 @@
       "mcp__Stripe__get_stripe_account_info",
       "mcp__Supabase__get_edge_function",
       "mcp__Supabase__deploy_edge_function",
-      "mcp__Supabase__get_advisors",
-      "Bash(git add:*)",
-      "Bash(git commit -m ':*)",
-      "Bash(git push:*)",
-      "WebSearch",
-      "Bash(ls /Users/josephkhemmoro/desktop/recreserve/recreserve/apps/mobile/babel.config.* /Users/josephkhemmoro/desktop/recreserve/recreserve/apps/mobile/metro.config.* /Users/josephkhemmoro/desktop/recreserve/recreserve/apps/mobile/app.json)",
-      "Bash(grep -n \"^    </View>$\\\\|^      </View>$\" /Users/josephkhemmoro/desktop/recreserve/recreserve/apps/mobile/app/\\\\\\(tabs\\\\\\)/reservations.jsx)"
+      "mcp__Supabase__get_advisors"
     ]
   }
 }
