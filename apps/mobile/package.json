@@ -15,6 +15,7 @@
     "@react-navigation/native-stack": "^7.14.7",
     "@stripe/stripe-react-native": "^0.64.0",
     "@supabase/supabase-js": "^2.100.0",
+    "eas": "^0.1.0",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.12",
     "expo-constants": "~18.0.13",
