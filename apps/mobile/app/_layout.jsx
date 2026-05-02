@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Slot, useRouter, useSegments } from 'expo-router'
-import { ActivityIndicator, View, StyleSheet } from 'react-native'
+import { ActivityIndicator, View, StyleSheet, Linking } from 'react-native'
 import * as Notifications from 'expo-notifications'
 import { StripeProvider } from '@stripe/stripe-react-native'
 import { supabase } from '../lib/supabase'
@@ -34,6 +34,76 @@ function RootLayoutInner() {
   const { fetchMembershipTier } = useMembershipStore()
   const notificationResponseListener = useRef()
   const [networkError, setNetworkError] = useState(false)
+
+  // Deep link handler — covers password recovery, magic links, etc.
+  // Email link → recreserve://reset-password?... → parse + establish session →
+  // route to /reset-password screen.
+  useEffect(() => {
+    const handleAuthDeepLink = async (rawUrl) => {
+      if (!rawUrl) return false
+      try {
+        // Replace custom scheme with https for URL parsing
+        const httpsUrl = rawUrl.replace(/^recreserve:\/\//, 'https://recreserve.app/')
+        const url = new URL(httpsUrl)
+        const isResetPath = url.pathname.includes('reset-password') || rawUrl.includes('reset-password')
+
+        // PKCE flow: ?code=...
+        const code = url.searchParams.get('code')
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) console.warn('[DeepLink] exchangeCodeForSession failed:', error.message)
+          if (isResetPath) router.replace('/(auth)/reset-password')
+          return true
+        }
+
+        // OTP/magiclink flow: ?token_hash=...&type=recovery
+        const tokenHash = url.searchParams.get('token_hash')
+        const type = url.searchParams.get('type')
+        if (tokenHash && type) {
+          const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
+          if (error) console.warn('[DeepLink] verifyOtp failed:', error.message)
+          if (type === 'recovery') router.replace('/(auth)/reset-password')
+          return true
+        }
+
+        // Implicit flow: #access_token=...&refresh_token=...&type=recovery
+        if (url.hash) {
+          const params = Object.fromEntries(new URLSearchParams(url.hash.replace(/^#/, '')))
+          if (params.access_token && params.refresh_token) {
+            await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token,
+            })
+            if (params.type === 'recovery') router.replace('/(auth)/reset-password')
+            return true
+          }
+        }
+      } catch (err) {
+        console.warn('[DeepLink] parse error:', err.message)
+      }
+      return false
+    }
+
+    // Handle initial URL (app opened cold from a link)
+    Linking.getInitialURL().then((url) => {
+      if (url) handleAuthDeepLink(url)
+    })
+
+    // Handle URLs while app is running
+    const sub = Linking.addEventListener('url', ({ url }) => handleAuthDeepLink(url))
+
+    // Also catch the PASSWORD_RECOVERY auth event as a backup
+    const { data: authSub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/(auth)/reset-password')
+      }
+    })
+
+    return () => {
+      sub.remove()
+      authSub?.subscription?.unsubscribe?.()
+    }
+  }, [router])
 
   // Auth initialization
   useEffect(() => {
