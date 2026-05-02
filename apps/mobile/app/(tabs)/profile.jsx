@@ -293,10 +293,10 @@ export default function ProfileScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.membershipActionBtn}
-                    onPress={() => router.push(`/membership/upgrade/${tier.id}`)}
+                    onPress={() => router.push('/membership')}
                   >
                     <Icon name="arrow-up-circle-outline" size="sm" color={colors.primary} />
-                    <Text style={styles.membershipActionText}>Upgrade</Text>
+                    <Text style={styles.membershipActionText}>Change Plan</Text>
                   </TouchableOpacity>
                 </View>
               </View>
