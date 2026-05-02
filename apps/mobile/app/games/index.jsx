@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, ActivityIndicator, RefreshControl, Alert } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
+import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
@@ -95,13 +97,14 @@ export default function GamesScreen() {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const renderGame = ({ item }) => {
+  const renderGame = ({ item, index }) => {
     const isCreator = item.creator_id === user?.id
     const hasJoined = myParticipation.has(item.id) || isCreator
     const spotsLeft = item.max_players - (item.joined_count || 1)
     const skillColor = SKILL_COLORS[item.skill_level] || colors.info
 
     return (
+      <Animated.View entering={FadeInDown.duration(350).delay(Math.min(index * 60, 300)).springify()}>
       <TouchableOpacity style={styles.card} onPress={() => router.push(`/games/${item.id}`)} activeOpacity={0.7}>
         <View style={styles.cardTop}>
           <Avatar uri={item.creator?.avatar_url} name={item.creator?.full_name || '?'} size="md" />
@@ -131,6 +134,7 @@ export default function GamesScreen() {
           ) : null}
         </View>
       </TouchableOpacity>
+      </Animated.View>
     )
   }
 
@@ -144,10 +148,11 @@ export default function GamesScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
+      <FlashList
         data={loading ? [] : games}
         renderItem={renderGame}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={160}
         contentContainerStyle={[styles.list, (loading || games.length === 0) && { flexGrow: 1 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchGames() }} tintColor={colors.primary} />}

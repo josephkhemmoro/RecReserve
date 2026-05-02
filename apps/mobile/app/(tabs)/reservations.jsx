@@ -3,12 +3,13 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   StyleSheet,
   ActivityIndicator,
   Alert,
   RefreshControl,
 } from 'react-native'
+import Animated, { FadeInDown } from 'react-native-reanimated'
+import { FlashList } from '@shopify/flash-list'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { toLocalISO } from '../../lib/dateUtils'
@@ -384,7 +385,7 @@ export default function ReservationsScreen() {
     return true
   }
 
-  const renderReservation = ({ item }) => {
+  const renderReservation = ({ item, index }) => {
     const statusInfo = getStatusStyle(item)
     const cancelable = activeTab === 'Scheduled' && canCancel(item)
     const withinCutoff = activeTab === 'Scheduled' && !canCancel(item)
@@ -393,7 +394,7 @@ export default function ReservationsScreen() {
     const showKudos = shouldShowKudosPrompt(item)
 
     return (
-      <View>
+      <Animated.View entering={FadeInDown.duration(350).delay(Math.min(index * 60, 300)).springify()}>
         {showKudos && (
           <KudosPrompt
             reservationId={item.id}
@@ -545,7 +546,7 @@ export default function ReservationsScreen() {
           </View>
         )}
       </View>
-      </View>
+      </Animated.View>
     )
   }
 
@@ -567,10 +568,11 @@ export default function ReservationsScreen() {
         ))}
       </View>
 
-      <FlatList
+      <FlashList
         data={loading ? [] : reservations}
         renderItem={renderReservation}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={180}
         contentContainerStyle={[
           styles.list,
           (loading || reservations.length === 0) && { flexGrow: 1 },

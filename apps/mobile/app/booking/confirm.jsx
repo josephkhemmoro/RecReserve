@@ -20,6 +20,7 @@ import { useMembershipStore } from '../../store/membershipStore'
 import { useStreakStore } from '../../store/streakStore'
 import { useAnalyticsStore } from '../../store/analyticsStore'
 import { useRewardsStore } from '../../store/rewardsStore'
+import { haptic } from '../../lib/haptics'
 import { colors, spacing, borderRadius, fontSizes, fontWeights, layout } from '../../theme'
 
 
@@ -317,10 +318,12 @@ export default function BookingConfirmScreen() {
       }
 
       useAnalyticsStore.getState().trackBookingCompleted(user?.id, selectedClub?.id, selectedCourt?.id)
+      haptic.success()
       router.replace('/booking/success')
       // Clear booking AFTER navigation to avoid flash of empty state
       setTimeout(() => clearBooking(), 500)
     } catch (err) {
+      haptic.error()
       setError(err.message || 'Something went wrong')
     } finally {
       setLoading(false)
