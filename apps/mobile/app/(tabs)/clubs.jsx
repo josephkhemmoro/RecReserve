@@ -108,14 +108,14 @@ export default function ClubsScreen() {
   const handleJoin = async (club) => {
     setJoining(club.id)
     try {
-      // Fetch club tiers and requires_paid_membership flag
+      // Fetch club tiers, paid-membership flag, AND terms info in one round-trip.
       const [tiersRes, clubRes] = await Promise.all([
         supabase
           .from('membership_tiers')
           .select('id, name, is_paid, monthly_price_cents, is_default, description, discount_percent, can_book_free, color, benefits')
           .eq('club_id', club.id)
           .order('sort_order', { ascending: true }),
-        supabase.from('clubs').select('requires_paid_membership').eq('id', club.id).single(),
+        supabase.from('clubs').select('requires_paid_membership, terms_url, terms_version').eq('id', club.id).single(),
       ])
 
       if (tiersRes.error) throw tiersRes.error
@@ -123,6 +123,15 @@ export default function ClubsScreen() {
 
       const tiers = tiersRes.data || []
       const requiresPaid = !!clubRes.data?.requires_paid_membership
+      const hasTerms = !!clubRes.data?.terms_url
+
+      // If club has T&C, route to terms acceptance screen first.
+      // The terms screen handles the rest of the join flow after acceptance.
+      if (hasTerms) {
+        setJoining(null)
+        router.push({ pathname: `/terms/${club.id}`, params: { mode: 'join' } })
+        return
+      }
 
       if (requiresPaid) {
         // Show tier picker — player picks a paid tier → upgrade flow
