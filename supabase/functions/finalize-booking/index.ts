@@ -60,6 +60,29 @@ serve(async (req) => {
       idempotency_key,
     } = await req.json();
 
+    // Step 0: Enforce club's terms & conditions acceptance.
+    //   If the club has terms uploaded, the user must have accepted the current
+    //   version. The mobile app prompts them to accept on launch — but this is
+    //   the server-side belt-and-suspenders check.
+    try {
+      const { data: termsOk } = await supabase.rpc("has_accepted_current_terms", {
+        p_user_id: user.id,
+        p_club_id: club_id,
+      });
+      if (termsOk === false) {
+        return new Response(
+          JSON.stringify({
+            error: "You must accept this club's terms and conditions before booking.",
+            errors: [{ code: "TERMS_NOT_ACCEPTED", message: "Open the club page in the app to review and accept the updated terms." }],
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch (termsErr) {
+      // Non-blocking — if the check itself fails, fall through to validation.
+      console.warn("Terms check failed (non-blocking):", (termsErr as Error).message);
+    }
+
     // Step 1: Re-validate server-side (prevents race conditions)
     const { data: validation, error: valError } = await supabase.rpc("validate_booking", {
       p_user_id: user.id,

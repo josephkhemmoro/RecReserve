@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/client";
 import { useAdminClub } from "@/lib/useAdminClub";
 import { ClubPhotoManager } from "@/components/settings/ClubPhotoManager";
 import { MembershipRequirementsCard } from "@/components/settings/MembershipRequirementsCard";
+import { TermsConditionsCard } from "@/components/settings/TermsConditionsCard";
 
 interface ClubData {
   id: string;
@@ -523,6 +524,9 @@ export default function SettingsPage() {
 
         {/* Membership Requirements */}
         {admin?.clubId && <MembershipRequirementsCard clubId={admin.clubId} />}
+
+        {/* Terms & Conditions */}
+        {admin?.clubId && <TermsConditionsCard clubId={admin.clubId} />}
 
         {/* Club Photos */}
         {admin?.clubId && <ClubPhotoManager clubId={admin.clubId} />}

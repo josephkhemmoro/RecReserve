@@ -40,6 +40,7 @@ export default function MemberDetailPage() {
   const [streak, setStreak] = useState<StreakInfo>({ current_streak: 0, longest_streak: 0 });
   const [kudosCount, setKudosCount] = useState(0);
   const [recentBookings, setRecentBookings] = useState<{ id: string; court_name: string; start_time: string; status: string; amount_paid: number }[]>([]);
+  const [termsAcceptances, setTermsAcceptances] = useState<{ id: string; terms_version: number; accepted_at: string; ip_address: string | null; user_agent: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -47,7 +48,7 @@ export default function MemberDetailPage() {
     try {
       const supabase = createClient();
 
-      const [memberRes, reservationsRes, streakRes, kudosRes, recentRes] = await Promise.all([
+      const [memberRes, reservationsRes, streakRes, kudosRes, recentRes, termsRes] = await Promise.all([
         supabase.from("users").select("id, full_name, email, avatar_url, phone, created_at, credit_balance").eq("id", memberId).single(),
         supabase.from("reservations").select("status, amount_paid").eq("user_id", memberId).eq("club_id", admin.clubId),
         supabase.from("player_streaks").select("current_streak, longest_streak").eq("user_id", memberId).eq("club_id", admin.clubId).single(),
@@ -55,7 +56,17 @@ export default function MemberDetailPage() {
         supabase.from("reservations").select("id, status, amount_paid, start_time, court:courts(name)")
           .eq("user_id", memberId).eq("club_id", admin.clubId)
           .order("start_time", { ascending: false }).limit(20),
+        supabase.from("terms_acceptances").select("id, terms_version, accepted_at, ip_address, user_agent")
+          .eq("user_id", memberId).eq("club_id", admin.clubId)
+          .order("accepted_at", { ascending: false }),
       ]);
+      setTermsAcceptances((termsRes.data || []).map((t) => ({
+        id: t.id,
+        terms_version: t.terms_version,
+        accepted_at: t.accepted_at,
+        ip_address: t.ip_address,
+        user_agent: t.user_agent,
+      })));
 
       setMember(memberRes.data as MemberDetail | null);
 
@@ -171,6 +182,34 @@ export default function MemberDetailPage() {
             <StatCard label="Current Streak" value={`${streak.current_streak} weeks`} />
             <StatCard label="Longest Streak" value={`${streak.longest_streak} weeks`} />
           </div>
+
+          {/* Terms & Conditions Acceptance History */}
+          <Card title="Terms & Conditions" subtitle="Audit trail of when this member accepted club terms" noPadding>
+            {termsAcceptances.length === 0 ? (
+              <p className="px-6 py-4 text-sm text-slate-500">This member has not accepted any version of the club&apos;s terms.</p>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/40">
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Version</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Accepted</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">IP Address</th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Device</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {termsAcceptances.map((t) => (
+                    <tr key={t.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                      <td className="px-6 py-3"><Badge label={`v${t.terms_version}`} variant="brand" size="sm" /></td>
+                      <td className="px-6 py-3 text-sm text-slate-700 tabular-nums">{new Date(t.accepted_at).toLocaleString()}</td>
+                      <td className="px-6 py-3 text-xs text-slate-500 font-mono">{t.ip_address || "—"}</td>
+                      <td className="px-6 py-3 text-xs text-slate-500 max-w-xs truncate" title={t.user_agent || ""}>{t.user_agent || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
 
           {/* Recent Bookings */}
           <Card title="Recent Bookings" noPadding>

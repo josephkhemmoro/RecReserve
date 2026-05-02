@@ -146,6 +146,41 @@ function RootLayoutInner() {
     checkMemberships()
   }, [session?.user?.id])
 
+  // Check for outdated terms acceptances after login + on resume.
+  // If the user is a member of a club whose terms_version > their accepted version,
+  // route to the re-accept screen.
+  useEffect(() => {
+    if (!session?.user?.id) return
+    let cancelled = false
+
+    const checkOutdatedTerms = async () => {
+      try {
+        const { data, error } = await supabase.rpc('list_outdated_terms_clubs', {
+          p_user_id: session.user.id,
+        })
+        if (cancelled || error || !data || data.length === 0) return
+        // Route to the first one — if they have multiple, they'll see the next after accepting this one
+        const first = data[0]
+        router.push({ pathname: `/terms/${first.club_id}`, params: { mode: 'reaccept' } })
+      } catch (err) {
+        console.warn('Outdated terms check failed (non-blocking):', err.message)
+      }
+    }
+
+    // Initial check
+    checkOutdatedTerms()
+
+    // Re-check on app resume
+    const { AppState } = require('react-native')
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') checkOutdatedTerms()
+    })
+    return () => {
+      cancelled = true
+      sub.remove()
+    }
+  }, [session?.user?.id, router])
+
   // Routing logic
   useEffect(() => {
     if (loading) return
