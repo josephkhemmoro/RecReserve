@@ -60,12 +60,31 @@ export function PlayTab({ clubId }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.sectionLabelRow}>
+        <Text style={styles.sectionLabel}>Casual Play</Text>
+      </View>
       <View style={styles.quickActions}>
         {[
           { label: 'Create Game', icon: 'add-circle-outline', bg: colors.primarySurface, color: colors.primary, route: '/games/create' },
           { label: 'Open Games', icon: 'tennisball-outline', bg: colors.accentMuted, color: colors.accent, route: '/games' },
           { label: 'Open Spots', icon: 'hand-left-outline', bg: colors.warningLight, color: colors.warning, route: '/open-spots' },
           { label: 'Groups', icon: 'people-outline', bg: colors.successLight, color: colors.success, route: '/groups' },
+        ].map((a) => (
+          <TouchableOpacity key={a.label} style={styles.actionCard} onPress={() => router.push(a.route)}>
+            <View style={[styles.actionIcon, { backgroundColor: a.bg }]}><Icon name={a.icon} size="md" color={a.color} /></View>
+            <Text style={styles.actionLabel}>{a.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.sectionLabelRow}>
+        <Text style={styles.sectionLabel}>Organized Play</Text>
+      </View>
+      <View style={styles.quickActions}>
+        {[
+          { label: 'Programs', icon: 'school-outline', bg: '#EDE9FE', color: '#7C3AED', route: '/programs' },
+          { label: 'Leagues', icon: 'trophy-outline', bg: '#FEF3C7', color: '#D97706', route: '/leagues' },
+          { label: 'Players', icon: 'person-outline', bg: colors.neutral100, color: colors.neutral600, route: '/players' },
         ].map((a) => (
           <TouchableOpacity key={a.label} style={styles.actionCard} onPress={() => router.push(a.route)}>
             <View style={[styles.actionIcon, { backgroundColor: a.bg }]}><Icon name={a.icon} size="md" color={a.color} /></View>
@@ -130,7 +149,9 @@ export function PlayTab({ clubId }) {
 const styles = StyleSheet.create({
   container: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   loading: { paddingVertical: 60, alignItems: 'center' },
-  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xl },
+  sectionLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, marginTop: spacing.xs },
+  sectionLabel: { fontSize: 11, fontWeight: '700', color: colors.neutral500, letterSpacing: 1.2, textTransform: 'uppercase' },
+  quickActions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   actionCard: { flex: 1, alignItems: 'center', gap: spacing.sm },
   actionIcon: { width: 48, height: 48, borderRadius: borderRadius.lg, alignItems: 'center', justifyContent: 'center' },
   actionLabel: { fontSize: 11, fontWeight: '600', color: colors.neutral600, textAlign: 'center' },
