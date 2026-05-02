@@ -18,7 +18,6 @@ import { Icon, Button, Avatar } from '../../components/ui'
 import { ClubHeader, HeroCarousel, StreakStrip, HomeTabs, FloatingBookButton } from '../../components/home'
 import { AboutTab } from '../../components/home/tabs/AboutTab'
 import { BookTab } from '../../components/home/tabs/BookTab'
-import { MembershipsTab } from '../../components/home/tabs/MembershipsTab'
 import { EventsTab } from '../../components/home/tabs/EventsTab'
 import { PlayTab } from '../../components/home/tabs/PlayTab'
 
@@ -166,7 +165,7 @@ export default function HomeScreen() {
           )}
           {activeTab === 'Play' && <PlayTab clubId={clubId} />}
           {activeTab === 'Book' && <BookTab clubId={clubId} tier={tier} />}
-          {activeTab === 'Memberships' && <MembershipsTab userTier={tier} tiers={tiers} />}
+
           {activeTab === 'Events' && <EventsTab upcomingEvents={upcomingEvents} pastEvents={pastEvents} />}
         </ScrollView>
       )}

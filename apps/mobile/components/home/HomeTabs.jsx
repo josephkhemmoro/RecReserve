@@ -1,50 +1,41 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { colors, textStyles, spacing } from '../../theme'
 
-const TABS = ['About', 'Book', 'Play', 'Memberships', 'Events']
+const TABS = ['About', 'Book', 'Play', 'Events']
 
 export function HomeTabs({ activeTab, onChangeTab }) {
   return (
-    <View style={styles.wrapper}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.container}
-        bounces={false}
-      >
-        {TABS.map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => onChangeTab(tab)}
-            activeOpacity={0.7}
+    <View style={styles.container}>
+      {TABS.map((tab) => (
+        <TouchableOpacity
+          key={tab}
+          style={[styles.tab, activeTab === tab && styles.tabActive]}
+          onPress={() => onChangeTab(tab)}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[styles.tabText, activeTab === tab && styles.tabTextActive]}
+            numberOfLines={1}
           >
-            <Text
-              style={[styles.tabText, activeTab === tab && styles.tabTextActive]}
-              numberOfLines={1}
-            >
-              {tab}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            {tab}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
+    flexDirection: 'row',
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral150,
   },
-  container: {
-    flexDirection: 'row',
-    paddingHorizontal: spacing.md,
-  },
   tab: {
+    flex: 1,
+    alignItems: 'center',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
   },

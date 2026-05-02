@@ -243,6 +243,7 @@ export default function ProfileScreen() {
         {/* Membership Card */}
         {selectedClub && (
           <View style={styles.membershipSection}>
+            <Text style={styles.sectionLabel}>Membership</Text>
             {tierLoading ? (
               <View style={styles.membershipCard}>
                 <View style={[styles.skeletonBar, { width: '50%', height: 14 }]} />
@@ -269,6 +270,35 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={styles.tierSubtext}>Standard pricing</Text>
                 )}
+                {(tier.benefits || []).length > 0 && (
+                  <View style={styles.benefitsList}>
+                    {tier.benefits.slice(0, 3).map((b, i) => (
+                      <View key={i} style={styles.benefitRow}>
+                        <Icon name="checkmark-circle" size="sm" color={colors.success} />
+                        <Text style={styles.benefitText}>{b}</Text>
+                      </View>
+                    ))}
+                    {tier.benefits.length > 3 && (
+                      <Text style={styles.benefitMore}>+{tier.benefits.length - 3} more</Text>
+                    )}
+                  </View>
+                )}
+                <View style={styles.membershipActions}>
+                  <TouchableOpacity
+                    style={styles.membershipActionBtn}
+                    onPress={() => router.push(`/membership/detail/${tier.id}`)}
+                  >
+                    <Icon name="information-circle-outline" size="sm" color={colors.primary} />
+                    <Text style={styles.membershipActionText}>View Details</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.membershipActionBtn}
+                    onPress={() => router.push(`/membership/upgrade/${tier.id}`)}
+                  >
+                    <Icon name="arrow-up-circle-outline" size="sm" color={colors.primary} />
+                    <Text style={styles.membershipActionText}>Upgrade</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             ) : membership ? (
               <View style={styles.membershipCard}>
@@ -505,6 +535,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.neutral400,
     flex: 1,
+  },
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.neutral500,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  benefitsList: {
+    marginTop: spacing.sm,
+    gap: 6,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  benefitText: {
+    fontSize: 13,
+    color: colors.neutral700,
+    flex: 1,
+  },
+  benefitMore: {
+    fontSize: 12,
+    color: colors.neutral400,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  membershipActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral100,
+  },
+  membershipActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primarySurface,
+    borderRadius: borderRadius.md,
+  },
+  membershipActionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
   skeletonBar: {
     backgroundColor: colors.neutral100,
